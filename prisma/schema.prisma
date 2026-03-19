@@ -1,12 +1,160 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "sqlite"
   url      = env("DATABASE_URL")
+}
+
+model User {
+  id       Int    @id @default(autoincrement())
+  username String @unique
+  password String
+}
+
+model Dns {
+  id    Int    @id @default(autoincrement())
+  title String
+  url   String
+}
+
+model MacUser {
+  id         Int     @id @default(autoincrement())
+  macAddress String  @map("mac_address")
+  protection Boolean @default(false)
+  title      String
+  url        String
+  username   String
+  password   String
+
+  @@map("mac_users")
+}
+
+model ActivationCode {
+  id       Int    @id @default(autoincrement())
+  code     String @unique
+  url      String
+  username String
+  password String
+  status   String @default("NotUsed")
+
+  @@map("activation_codes")
+}
+
+model Trial {
+  id         Int      @id @default(autoincrement())
+  macAddress String   @map("mac_address")
+  expireDate DateTime @map("expire_date")
+
+  @@map("trials")
+}
+
+model Demo {
+  id      Int    @id @default(autoincrement())
+  mplname String @default("")
+  mdns    String @default("")
+  muser   String @default("")
+  mpass   String @default("")
+}
+
+model Notification {
+  id         Int    @id @default(autoincrement())
+  messageOne String @default("") @map("message_one")
+  messageTwo String @default("") @map("message_two")
+
+  @@map("notifications")
+}
+
+model MacLength {
+  id     Int @id @default(autoincrement())
+  length Int @default(12)
+
+  @@map("mac_length")
+}
+
+model Theme {
+  id      Int    @id @default(autoincrement())
+  themeNo String @default("theme_10") @map("theme_no")
+
+  @@map("themes")
+}
+
+model LoginText {
+  id            Int    @id @default(autoincrement())
+  loginTitle    String @default("") @map("logintitial")
+  loginSubtitle String @default("") @map("loginsubtitial")
+
+  @@map("login_text")
+}
+
+model AdsSetting {
+  id      Int    @id @default(autoincrement())
+  adsType String @default("auto") @map("adstype")
+
+  @@map("ads_settings")
+}
+
+model AutoLayout {
+  id     Int    @id @default(autoincrement())
+  layout String @default("layout_7")
+
+  @@map("auto_layout")
+}
+
+model FrameLayout {
+  id     Int    @id @default(autoincrement())
+  layout String @default("layout_2")
+
+  @@map("frame_layout")
+}
+
+model ManualAd {
+  id    Int    @id @default(autoincrement())
+  title String
+  url   String
+
+  @@map("manual_ads")
+}
+
+model League {
+  id         Int    @id @default(autoincrement())
+  leagueName String @map("league_name")
+  leagueId   String @map("league_id")
+
+  @@map("leagues")
+}
+
+model LeagueWidget {
+  id         Int    @id @default(autoincrement())
+  leagueName String @map("league_name")
+  leagueId   String @map("league_id")
+
+  @@map("league_widgets")
+}
+
+model Sport {
+  id          Int    @id @default(autoincrement())
+  api         String @default("")
+  headerName  String @default("Event") @map("header_n")
+  borderColor String @default("#000000") @map("border_c")
+  bgColor     String @default("#000000") @map("background_c")
+  textColor   String @default("#ffffff") @map("text_c")
+
+  @@map("sports")
+}
+
+model TmdbApi {
+  id      Int    @id @default(autoincrement())
+  tmdbKey String @default("") @map("tmdbkey")
+
+  @@map("tmdb_api")
+}
+
+model RemoteUpdate {
+  id      Int    @id @default(autoincrement())
+  version String @default("1.0") @map("nversion")
+  url     String @default("") @map("nurl")
+
+  @@map("remote_update")
 }
