@@ -7,11 +7,14 @@ import androidx.navigation.compose.rememberNavController
 import com.iboplayer.next.ui.channels.ChannelListScreen
 import com.iboplayer.next.ui.player.PlayerScreen
 import com.iboplayer.next.ui.setup.SetupScreen
+import com.iboplayer.next.ui.splash.SplashDestination
+import com.iboplayer.next.ui.splash.SplashScreen
 import java.net.URLDecoder
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
 object Routes {
+    const val SPLASH = "splash"
     const val SETUP = "setup"
     const val CHANNELS = "channels"
     const val PLAYER = "player/{name}/{url}"
@@ -27,14 +30,32 @@ object Routes {
 fun AppNavHost() {
     val navController = rememberNavController()
 
-    NavHost(navController = navController, startDestination = Routes.SETUP) {
+    NavHost(navController = navController, startDestination = Routes.SPLASH) {
+        composable(Routes.SPLASH) {
+            SplashScreen(
+                onNavigate = { dest ->
+                    when (dest) {
+                        SplashDestination.Channels -> {
+                            navController.navigate(Routes.CHANNELS) {
+                                popUpTo(Routes.SPLASH) { inclusive = true }
+                            }
+                        }
+                        SplashDestination.Setup -> {
+                            navController.navigate(Routes.SETUP) {
+                                popUpTo(Routes.SPLASH) { inclusive = true }
+                            }
+                        }
+                    }
+                },
+            )
+        }
         composable(Routes.SETUP) {
             SetupScreen(
                 onLoaded = {
                     navController.navigate(Routes.CHANNELS) {
                         popUpTo(Routes.SETUP) { inclusive = true }
                     }
-                }
+                },
             )
         }
         composable(Routes.CHANNELS) {
@@ -47,22 +68,22 @@ fun AppNavHost() {
                     navController.navigate(Routes.SETUP) {
                         popUpTo(0) { inclusive = true }
                     }
-                }
+                },
             )
         }
         composable(Routes.PLAYER) { backStackEntry ->
             val name = URLDecoder.decode(
                 backStackEntry.arguments?.getString("name").orEmpty(),
-                StandardCharsets.UTF_8.toString()
+                StandardCharsets.UTF_8.toString(),
             )
             val url = URLDecoder.decode(
                 backStackEntry.arguments?.getString("url").orEmpty(),
-                StandardCharsets.UTF_8.toString()
+                StandardCharsets.UTF_8.toString(),
             )
             PlayerScreen(
                 title = name,
                 streamUrl = url,
-                onBack = { navController.navigateUp() }
+                onBack = { navController.navigateUp() },
             )
         }
     }

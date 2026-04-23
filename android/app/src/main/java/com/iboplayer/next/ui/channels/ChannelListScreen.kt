@@ -19,10 +19,13 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -38,11 +41,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.iboplayer.next.data.Channel
 
@@ -52,7 +56,7 @@ fun ChannelListScreen(
     onChannelClick: (Channel) -> Unit,
     onBack: () -> Unit,
     onReset: () -> Unit,
-    viewModel: ChannelListViewModel = viewModel(),
+    viewModel: ChannelListViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -66,7 +70,7 @@ fun ChannelListScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = onReset) {
+                    IconButton(onClick = { viewModel.resetSession(onReset) }) {
                         Icon(Icons.Default.Refresh, contentDescription = "Change playlist")
                     }
                 }
@@ -122,7 +126,11 @@ fun ChannelListScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(state.filtered, key = { it.id }) { channel ->
-                    ChannelRow(channel = channel, onClick = { onChannelClick(channel) })
+                    ChannelRow(
+                        channel = channel,
+                        onClick = { onChannelClick(channel) },
+                        onToggleFavorite = { viewModel.toggleFavorite(channel) }
+                    )
                 }
             }
         }
@@ -130,11 +138,16 @@ fun ChannelListScreen(
 }
 
 @Composable
-private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
+private fun ChannelRow(
+    channel: Channel,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
         Row(
             modifier = Modifier
@@ -182,11 +195,13 @@ private fun ChannelRow(channel: Channel, onClick: () -> Unit) {
                     )
                 }
             }
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = "Play",
-                tint = MaterialTheme.colorScheme.primary,
-            )
+            IconButton(onClick = onToggleFavorite) {
+                Icon(
+                    imageVector = if (channel.isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (channel.isFavorite) Color.Red else MaterialTheme.colorScheme.outline
+                )
+            }
         }
     }
 }

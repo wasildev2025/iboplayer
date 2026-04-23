@@ -2,6 +2,11 @@ package com.iboplayer.next.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
+/** Premium IPTV panel accent (gold) — activation / focus */
+val AccentGold = Color(0xFFE8A94A)
+val AccentGoldDim = Color(0x99E8A94A)
+val AccentOrange = Color(0xFFF97316)
+
 val Primary = Color(0xFF3F6BFF)
 val OnPrimary = Color(0xFFFFFFFF)
 val PrimaryContainer = Color(0xFFDBE2FF)

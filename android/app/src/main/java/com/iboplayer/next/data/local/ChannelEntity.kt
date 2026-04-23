@@ -12,6 +12,7 @@ data class ChannelEntity(
     val logo: String? = null,
     val groupName: String? = null,
     val tvgId: String? = null,
+    val isFavorite: Boolean = false,
 )
 
 fun ChannelEntity.toExternal() = Channel(
@@ -20,7 +21,8 @@ fun ChannelEntity.toExternal() = Channel(
     url = url,
     logo = logo,
     group = groupName,
-    tvgId = tvgId
+    tvgId = tvgId,
+    isFavorite = isFavorite,
 )
 
 fun Channel.toEntity() = ChannelEntity(
@@ -29,5 +31,6 @@ fun Channel.toEntity() = ChannelEntity(
     url = url,
     logo = logo,
     groupName = group,
-    tvgId = tvgId
+    tvgId = tvgId,
+    isFavorite = isFavorite,
 )

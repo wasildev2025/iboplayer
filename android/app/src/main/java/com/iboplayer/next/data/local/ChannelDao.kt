@@ -25,4 +25,10 @@ interface ChannelDao {
 
     @Query("SELECT COUNT(*) FROM channels")
     suspend fun getCount(): Int
+
+    @Query("UPDATE channels SET isFavorite = :isFavorite WHERE id = :channelId")
+    suspend fun updateFavorite(channelId: String, isFavorite: Boolean)
+
+    @Query("SELECT * FROM channels WHERE isFavorite = 1")
+    fun getFavorites(): Flow<List<ChannelEntity>>
 }

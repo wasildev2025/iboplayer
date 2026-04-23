@@ -1,11 +1,7 @@
 package com.iboplayer.next
 
 import android.app.Application
-import com.iboplayer.next.data.PlaylistRepository
-import com.iboplayer.next.data.SettingsStore
+import dagger.hilt.android.HiltAndroidApp
 
-class IboApp : Application() {
-
-    val settingsStore by lazy { SettingsStore(this) }
-    val playlistRepository by lazy { PlaylistRepository() }
-}
+@HiltAndroidApp
+class IboApp : Application()

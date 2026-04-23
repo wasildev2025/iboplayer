@@ -7,4 +7,5 @@ data class Channel(
     val logo: String? = null,
     val group: String? = null,
     val tvgId: String? = null,
+    val isFavorite: Boolean = false,
 )
