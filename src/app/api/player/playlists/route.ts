@@ -30,7 +30,10 @@ export async function GET(req: Request) {
   const normMac = normalizeMac(payload.mac);
 
   if (kind === "macUser") {
-    const row = await prisma.macUser.findUnique({ where: { id } });
+    const row = await prisma.macUser.findUnique({
+      where: { id },
+      include: { dns: true },
+    });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const playlists = await playlistsForMacUser(row);
     const expireAt = await trialExpireIsoForMac(normMac);
@@ -42,7 +45,10 @@ export async function GET(req: Request) {
   }
 
   if (kind === "activation") {
-    const row = await prisma.activationCode.findUnique({ where: { id } });
+    const row = await prisma.activationCode.findUnique({
+      where: { id },
+      include: { dns: true },
+    });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const playlists = playlistsFromActivation(row);
     const expireAt = await trialExpireIsoForMac(normMac);

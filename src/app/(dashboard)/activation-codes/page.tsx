@@ -15,7 +15,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Loader2, Search, ChevronLeft, ChevronRight, KeyRound } from "lucide-react";
+import { Plus, Loader2, Search, ChevronLeft, ChevronRight, KeyRound, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
 interface ActivationCode {
@@ -112,7 +112,7 @@ export default function ActivationCodesPage() {
                   <TableHead>Code</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>URL</TableHead>
-                  <TableHead className="w-[80px]">Actions</TableHead>
+                  <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -140,7 +140,16 @@ export default function ActivationCodesPage() {
                         {item.url}
                       </TableCell>
                       <TableCell>
-                        <DeleteDialog onConfirm={() => handleDelete(item.id)} />
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => router.push(`/activation-codes/${item.id}/edit`)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <DeleteDialog onConfirm={() => handleDelete(item.id)} />
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

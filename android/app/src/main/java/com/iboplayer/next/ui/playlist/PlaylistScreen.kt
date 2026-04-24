@@ -5,43 +5,53 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Lock
+import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.QrCode2
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -49,13 +59,17 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.iboplayer.next.AppConfig
+import com.iboplayer.next.BuildConfig
 import com.iboplayer.next.data.local.PlaylistEntity
+import com.iboplayer.next.ui.components.QrCode
 import com.iboplayer.next.ui.theme.ProtonBackground
 import com.iboplayer.next.ui.theme.ProtonGold
 import com.iboplayer.next.ui.theme.ProtonOrange
 import com.iboplayer.next.ui.theme.ProtonText
 import com.iboplayer.next.ui.theme.ProtonTextMuted
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PlaylistScreen(
     onConnected: () -> Unit,
@@ -63,48 +77,90 @@ fun PlaylistScreen(
     viewModel: PlaylistViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     ProtonBackground {
-        BoxWithConstraints(
+        Scaffold(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(24.dp),
-        ) {
-            val isWide = maxWidth > 720.dp
-            if (isWide) {
-                Row(
-                    modifier = Modifier.fillMaxSize(),
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    PlaylistGridSection(
-                        state = state,
-                        onTile = { viewModel.onPlaylistTapped(it, onConnected) },
-                        onAdd = viewModel::openAddDialog,
-                        onBack = onBack,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    DeviceInfoPanel(
-                        state = state,
-                        modifier = Modifier.width(300.dp).fillMaxHeight(),
+                .nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = Color.Transparent,
+            topBar = {
+                CenterAlignedTopAppBar(
+                    title = {
+                        Text(
+                            "Playlists",
+                            color = ProtonText,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(
+                                Icons.AutoMirrored.Outlined.ArrowBack,
+                                contentDescription = "Back",
+                                tint = ProtonText,
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = Color(0xDD0B1220),
+                    ),
+                    scrollBehavior = scrollBehavior,
+                )
+            },
+            floatingActionButton = {
+                ExtendedFloatingActionButton(
+                    onClick = viewModel::openAddDialog,
+                    icon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                    text = { Text("Add Playlist", fontWeight = FontWeight.SemiBold) },
+                    containerColor = ProtonOrange,
+                    contentColor = Color.White,
+                )
+            },
+        ) { inner ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = inner.calculateTopPadding() + 8.dp,
+                    bottom = inner.calculateBottomPadding() + 96.dp,
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item {
+                    SectionLabel(
+                        title = "Your Playlists",
+                        trailing = if (state.playlists.isNotEmpty()) "${state.playlists.size}" else null,
                     )
                 }
-            } else {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    PlaylistGridSection(
-                        state = state,
-                        onTile = { viewModel.onPlaylistTapped(it, onConnected) },
-                        onAdd = viewModel::openAddDialog,
-                        onBack = onBack,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    DeviceInfoPanel(
-                        state = state,
-                        modifier = Modifier.fillMaxWidth(),
+
+                if (state.playlists.isEmpty()) {
+                    item {
+                        EmptyPlaylistsCard(onAdd = viewModel::openAddDialog)
+                    }
+                } else {
+                    items(state.playlists, key = { it.id }) { playlist ->
+                        PlaylistCard(
+                            playlist = playlist,
+                            connected = state.connectedId == playlist.id,
+                            onClick = { viewModel.onPlaylistTapped(playlist, onConnected) },
+                        )
+                    }
+                }
+
+                item { Spacer(Modifier.height(12.dp)) }
+                item { SectionLabel(title = "Device") }
+                item {
+                    DeviceInfoCard(
+                        mac = state.macAddress,
+                        deviceKey = state.deviceKey,
+                        panelBaseUrl = state.panelBaseUrl,
                     )
                 }
+                item { VersionFooter() }
             }
         }
     }
@@ -115,7 +171,7 @@ fun PlaylistScreen(
             loading = state.adding,
             error = state.addError,
             onCodeChange = viewModel::onActivationCodeChange,
-            onConfirm = viewModel::submitActivationCode,
+            onConfirm = { viewModel.submitActivationCode(onConnected) },
             onDismiss = viewModel::closeAddDialog,
         )
     }
@@ -133,216 +189,301 @@ fun PlaylistScreen(
 }
 
 @Composable
-private fun PlaylistGridSection(
-    state: PlaylistViewModel.UiState,
-    onTile: (PlaylistEntity) -> Unit,
-    onAdd: () -> Unit,
-    onBack: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(modifier = modifier) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(ProtonOrange),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("IBO", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp)
-            }
+private fun SectionLabel(title: String, trailing: String? = null) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title.uppercase(),
+            color = ProtonTextMuted,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+        if (trailing != null) {
             Text(
-                text = "Playlist",
-                color = ProtonText,
-                style = MaterialTheme.typography.headlineSmall,
+                text = trailing,
+                color = ProtonOrange,
+                style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.SemiBold,
             )
-            Spacer(Modifier.weight(1f))
-            TextButton(onClick = onBack) {
-                Text("Back", color = ProtonGold)
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-
-        LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 180.dp),
-            contentPadding = PaddingValues(bottom = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
-            modifier = Modifier.fillMaxSize(),
-        ) {
-            items(state.playlists, key = { it.id }) { playlist ->
-                PlaylistTile(
-                    playlist = playlist,
-                    connected = state.connectedId == playlist.id,
-                    onClick = { onTile(playlist) },
-                )
-            }
-            item { AddPlaylistTile(onClick = onAdd) }
         }
     }
 }
 
 @Composable
-private fun PlaylistTile(
+private fun PlaylistCard(
     playlist: PlaylistEntity,
     connected: Boolean,
     onClick: () -> Unit,
 ) {
-    Box(
+    Row(
         modifier = Modifier
-            .height(130.dp)
+            .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x66111C2E))
+            .background(Color(0x88111C2E))
             .border(
-                1.dp,
-                if (connected) ProtonOrange else ProtonGold.copy(alpha = 0.5f),
-                RoundedCornerShape(16.dp),
+                width = if (connected) 1.5.dp else 1.dp,
+                color = if (connected) ProtonOrange else ProtonGold.copy(alpha = 0.35f),
+                shape = RoundedCornerShape(16.dp),
             )
             .clickable(onClick = onClick)
-            .padding(14.dp),
+            .padding(horizontal = 14.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.fillMaxSize()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    text = playlist.title,
-                    color = ProtonText,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f),
+        Box(
+            modifier = Modifier
+                .size(44.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(
+                    if (connected) ProtonOrange else Color(0x33F59E29)
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (connected) {
+                Icon(
+                    Icons.Outlined.CheckCircle,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp),
                 )
+            } else {
+                Text(
+                    text = playlist.title.firstOrNull()?.uppercase() ?: "P",
+                    color = ProtonOrange,
+                    fontWeight = FontWeight.Black,
+                    fontSize = 18.sp,
+                )
+            }
+        }
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = playlist.title.ifBlank { "Playlist" },
+                color = ProtonText,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                if (connected) {
+                    StatusPill(text = "Connected", filled = true)
+                }
                 if (playlist.isProtected) {
-                    Icon(
-                        imageVector = Icons.Outlined.Lock,
-                        contentDescription = "Protected",
-                        tint = ProtonGold,
-                        modifier = Modifier.size(18.dp),
+                    StatusPill(text = "Protected", filled = false, leading = {
+                        Icon(
+                            Icons.Outlined.Lock,
+                            contentDescription = null,
+                            tint = ProtonGold,
+                            modifier = Modifier.size(12.dp),
+                        )
+                    })
+                }
+                if (!connected && !playlist.isProtected) {
+                    Text(
+                        text = "Tap to connect",
+                        color = ProtonTextMuted,
+                        style = MaterialTheme.typography.bodySmall,
                     )
                 }
             }
-            if (playlist.isProtected) {
+        }
+
+        Icon(
+            Icons.AutoMirrored.Outlined.ChevronRight,
+            contentDescription = null,
+            tint = ProtonTextMuted,
+        )
+    }
+}
+
+@Composable
+private fun StatusPill(
+    text: String,
+    filled: Boolean,
+    leading: (@Composable () -> Unit)? = null,
+) {
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(999.dp))
+            .background(
+                if (filled) ProtonOrange else Color(0x33F59E29)
+            )
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        leading?.invoke()
+        Text(
+            text = text,
+            color = if (filled) Color.White else ProtonGold,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun EmptyPlaylistsCard(onAdd: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0x66111C2E))
+            .border(1.dp, ProtonGold.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+            .padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0x33F59E29)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Outlined.PlaylistAdd,
+                contentDescription = null,
+                tint = ProtonOrange,
+                modifier = Modifier.size(32.dp),
+            )
+        }
+        Spacer(Modifier.height(14.dp))
+        Text(
+            "No playlists yet",
+            color = ProtonText,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+        Spacer(Modifier.height(4.dp))
+        Text(
+            "Enter an activation code to add your first playlist.",
+            color = ProtonTextMuted,
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = TextAlign.Center,
+        )
+        Spacer(Modifier.height(16.dp))
+        Button(
+            onClick = onAdd,
+            colors = ButtonDefaults.buttonColors(containerColor = ProtonOrange),
+        ) {
+            Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Add Playlist", fontWeight = FontWeight.SemiBold)
+        }
+    }
+}
+
+@Composable
+private fun DeviceInfoCard(
+    mac: String,
+    deviceKey: String,
+    panelBaseUrl: String,
+) {
+    val subscribePayload = remember(panelBaseUrl, mac, deviceKey) {
+        buildSubscribePayload(panelBaseUrl, mac, deviceKey)
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(20.dp))
+            .background(Color(0x66111C2E))
+            .border(1.dp, ProtonGold.copy(alpha = 0.25f), RoundedCornerShape(20.dp))
+            .padding(20.dp),
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(120.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color.White)
+                    .padding(8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (subscribePayload.isNotBlank()) {
+                    QrCode(content = subscribePayload, size = 104.dp)
+                } else {
+                    Icon(
+                        Icons.Outlined.QrCode2,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(48.dp),
+                    )
+                }
+            }
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "Protected",
+                    "Subscribe or Renew",
+                    color = ProtonOrange,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    "Scan this QR code on your phone to open the panel with your device pre-filled.",
                     color = ProtonTextMuted,
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            Spacer(Modifier.weight(1f))
-            if (connected) {
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(999.dp))
-                        .background(Color(0xFF2563EB))
-                        .padding(horizontal = 10.dp, vertical = 4.dp),
-                ) {
-                    Text(
-                        "Connected",
-                        color = Color.White,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-            }
         }
-    }
-}
 
-@Composable
-private fun AddPlaylistTile(onClick: () -> Unit) {
-    Box(
-        modifier = Modifier
-            .height(130.dp)
-            .clip(RoundedCornerShape(16.dp))
-            .background(Color(0x33111C2E))
-            .border(1.dp, ProtonGold.copy(alpha = 0.45f), RoundedCornerShape(16.dp))
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Outlined.Add,
-                contentDescription = "Add playlist",
-                tint = ProtonOrange,
-                modifier = Modifier.size(36.dp),
-            )
-            Spacer(Modifier.height(6.dp))
-            Text(
-                "Add Playlist",
-                color = ProtonText,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DeviceInfoPanel(
-    state: PlaylistViewModel.UiState,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .clip(RoundedCornerShape(18.dp))
-            .background(Color(0x55111C2E))
-            .border(1.dp, ProtonGold.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
-            .padding(20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(
-            "Your MAC is Activated.",
-            color = ProtonText,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "PROTON TEAM",
-            color = ProtonOrange,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-        )
         Spacer(Modifier.height(16.dp))
-        Text(
-            "To add/manage the playlists, use following values on website:",
-            color = ProtonTextMuted,
-            style = MaterialTheme.typography.bodySmall,
-            textAlign = TextAlign.Center,
-        )
-        Spacer(Modifier.height(12.dp))
-        InfoBlock(label = "Mac Address", value = state.macAddress.formatMacForDisplay())
+        InfoRow(label = "MAC Address", value = mac.formatMacForDisplay())
         Spacer(Modifier.height(10.dp))
-        InfoBlock(label = "Device Key", value = state.deviceKey)
-        if (state.panelBaseUrl.isNotBlank()) {
-            Spacer(Modifier.height(16.dp))
-            Text(
-                state.panelBaseUrl,
-                color = ProtonTextMuted,
-                style = MaterialTheme.typography.labelSmall,
-            )
-        }
+        InfoRow(label = "Device Key", value = deviceKey)
     }
 }
 
 @Composable
-private fun InfoBlock(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(label, color = ProtonTextMuted, style = MaterialTheme.typography.labelMedium)
-        Spacer(Modifier.height(2.dp))
+private fun InfoRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            color = ProtonTextMuted,
+            style = MaterialTheme.typography.labelMedium,
+            modifier = Modifier.weight(1f),
+        )
         Text(
             text = value.ifBlank { "—" },
-            color = ProtonOrange,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
+            color = ProtonText,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
         )
     }
+}
+
+@Composable
+private fun VersionFooter() {
+    val currentYear = remember { java.util.Calendar.getInstance().get(java.util.Calendar.YEAR) }
+    val copyrightRange = if (currentYear > AppConfig.COPYRIGHT_START_YEAR) {
+        "${AppConfig.COPYRIGHT_START_YEAR}-$currentYear"
+    } else {
+        AppConfig.COPYRIGHT_START_YEAR.toString()
+    }
+    Text(
+        text = "v${BuildConfig.VERSION_NAME}  •  © $copyrightRange",
+        color = ProtonTextMuted,
+        style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+        textAlign = TextAlign.Center,
+    )
 }
 
 @Composable
@@ -356,18 +497,16 @@ private fun AddPlaylistDialog(
 ) {
     AlertDialog(
         onDismissRequest = { if (!loading) onDismiss() },
-        title = {
-            Text("Enter Your Activation Code", fontWeight = FontWeight.SemiBold)
-        },
+        title = { Text("Enter Activation Code", fontWeight = FontWeight.SemiBold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
                     value = code,
                     onValueChange = onCodeChange,
                     singleLine = true,
                     enabled = !loading,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("Activation code") },
+                    label = { Text("Activation code") },
                     colors = dialogFieldColors(),
                 )
                 error?.let {
@@ -392,7 +531,7 @@ private fun AddPlaylistDialog(
                         color = Color.White,
                     )
                 } else {
-                    Text("Login", fontWeight = FontWeight.SemiBold)
+                    Text("Activate", fontWeight = FontWeight.SemiBold)
                 }
             }
         },
@@ -471,9 +610,23 @@ private fun dialogFieldColors() = OutlinedTextFieldDefaults.colors(
     unfocusedContainerColor = Color.Black.copy(alpha = 0.18f),
 )
 
-/** 17:40:69:7A:20:34 → 17:40:69:7a:20:34 (lowercase hex with colon separators). */
 private fun String.formatMacForDisplay(): String {
     val hex = this.filter { it.isLetterOrDigit() }.lowercase()
     if (hex.length != 12) return this
     return hex.chunked(2).joinToString(":")
+}
+
+private fun buildSubscribePayload(panelBaseUrl: String, mac: String, deviceKey: String): String {
+    if (panelBaseUrl.isBlank()) return ""
+    val base = panelBaseUrl.trimEnd('/')
+    if (mac.isBlank()) return base
+    return buildString {
+        append(base)
+        append("/subscribe?mac=")
+        append(mac)
+        if (deviceKey.isNotBlank()) {
+            append("&key=")
+            append(deviceKey)
+        }
+    }
 }

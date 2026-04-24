@@ -47,8 +47,11 @@ data class LoginResponseDto(
 
 @Serializable
 data class ActivateResponseDto(
+    val token: String? = null,
     val playlists: List<PlaylistItemDto> = emptyList(),
     val added: PlaylistItemDto? = null,
+    val expireAt: String? = null,
+    val deviceKey: String? = null,
 )
 
 @Serializable

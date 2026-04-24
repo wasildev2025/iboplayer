@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { M3uExtractor } from "@/components/shared/m3u-extractor";
+import { M3uExtractor, type ExtractedM3u } from "@/components/shared/m3u-extractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, KeyRound, RefreshCw } from "lucide-react";
+import { Loader2, Save, KeyRound, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateActivationCode } from "@/lib/m3u-parser";
 
@@ -17,10 +17,12 @@ export default function CreateActivationCodePage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     code: "",
-    dns: "",
+    url: "",
     username: "",
     password: "",
     status: "NotUsed",
+    dnsId: null as number | null,
+    dnsTitle: "",
   });
 
   useEffect(() => {
@@ -31,14 +33,20 @@ export default function CreateActivationCodePage() {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleExtract = (data: { url: string; username: string; password: string }) => {
+  const handleExtract = (data: ExtractedM3u) => {
     setForm((prev) => ({
       ...prev,
-      dns: data.url,
+      url: data.url,
       username: data.username,
       password: data.password,
+      dnsId: data.dnsId,
+      dnsTitle: data.dnsTitle,
     }));
     toast.success("M3U data extracted");
+  };
+
+  const handleUrlChange = (value: string) => {
+    setForm((prev) => ({ ...prev, url: value, dnsId: null, dnsTitle: "" }));
   };
 
   const regenerateCode = () => {
@@ -53,7 +61,14 @@ export default function CreateActivationCodePage() {
       const res = await fetch("/api/activation-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          code: form.code,
+          url: form.url,
+          username: form.username,
+          password: form.password,
+          status: form.status,
+          dnsId: form.dnsId,
+        }),
       });
       if (!res.ok) throw new Error("Failed to create");
       toast.success("Activation code created successfully");
@@ -87,23 +102,33 @@ export default function CreateActivationCodePage() {
                   <Input
                     id="code"
                     value={form.code}
-                    readOnly
+                    onChange={(e) => updateField("code", e.target.value)}
                     className="font-mono flex-1"
+                    required
                   />
                   <Button type="button" variant="outline" onClick={regenerateCode}>
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Auto-generated — edit to set a custom code, or click the refresh button.
+                </p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="dns">DNS</Label>
+                <Label htmlFor="url">DNS / URL</Label>
                 <Input
-                  id="dns"
-                  value={form.dns}
-                  onChange={(e) => updateField("dns", e.target.value)}
+                  id="url"
+                  value={form.url}
+                  onChange={(e) => handleUrlChange(e.target.value)}
                   placeholder="https://..."
                   required
                 />
+                {form.dnsId && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Link2 className="h-3 w-3" />
+                    Linked to DNS: <span className="font-medium">{form.dnsTitle}</span> (id {form.dnsId})
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>

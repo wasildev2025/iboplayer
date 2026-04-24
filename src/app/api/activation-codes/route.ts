@@ -49,6 +49,7 @@ export async function POST(req: Request) {
       username: data.username,
       password: data.password,
       status: data.status || "NotUsed",
+      dnsId: typeof data.dnsId === "number" ? data.dnsId : null,
     },
   });
   return NextResponse.json(item);

@@ -80,16 +80,16 @@ class PlayerApi @Inject constructor(
 
     suspend fun activatePlaylist(
         baseUrl: String,
-        bearerToken: String,
+        macAddress: String,
         activationCode: String,
     ): ActivateResponseDto = withContext(Dispatchers.IO) {
         val url = joinBase(baseUrl, "/api/player/playlists/activate")
         val payload = buildJsonObject {
+            put("macAddress", JsonPrimitive(macAddress))
             put("activationCode", JsonPrimitive(activationCode.trim()))
         }
         val req = Request.Builder()
             .url(url)
-            .header("Authorization", "Bearer $bearerToken")
             .post(payload.toString().toRequestBody(jsonMedia))
             .build()
         client.newCall(req).execute().use { response ->

@@ -35,7 +35,6 @@ object DataModule {
             AppDatabase::class.java,
             "ibo_player.db"
         )
-            .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
     }
 

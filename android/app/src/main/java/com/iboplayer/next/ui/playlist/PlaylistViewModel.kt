@@ -2,12 +2,15 @@ package com.iboplayer.next.ui.playlist
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.iboplayer.next.AppConfig
 import com.iboplayer.next.data.PlaylistRepository
 import com.iboplayer.next.data.SettingsStore
 import com.iboplayer.next.data.local.PlaylistEntity
 import com.iboplayer.next.data.remote.PlayerApi
 import com.iboplayer.next.data.remote.PlayerApiException
+import com.iboplayer.next.util.DeviceMac
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -23,6 +26,7 @@ class PlaylistViewModel @Inject constructor(
     private val settings: SettingsStore,
     private val repo: PlaylistRepository,
     private val api: PlayerApi,
+    private val deviceMac: DeviceMac,
 ) : ViewModel() {
 
     data class UiState(
@@ -43,27 +47,32 @@ class PlaylistViewModel @Inject constructor(
 
     private val _local = MutableStateFlow(UiState())
 
+    private data class SettingsSnapshot(
+        val mac: String,
+        val deviceKey: String,
+        val panelBaseUrl: String,
+    )
+
+    private val settingsSnapshot: Flow<SettingsSnapshot> = combine(
+        settings.macAddress,
+        settings.deviceKey,
+        settings.panelBaseUrl,
+    ) { mac, deviceKey, base ->
+        SettingsSnapshot(mac.orEmpty(), deviceKey.orEmpty(), base.orEmpty())
+    }
+
     val state: StateFlow<UiState> = combine(
         _local,
         repo.playlists,
         repo.connectedPlaylist,
-        settings.macAddress,
-        settings.deviceKey,
-        settings.panelBaseUrl,
-    ) { arr ->
-        val local = arr[0] as UiState
-        @Suppress("UNCHECKED_CAST")
-        val list = arr[1] as List<PlaylistEntity>
-        val connected = arr[2] as PlaylistEntity?
-        val mac = arr[3] as String?
-        val deviceKey = arr[4] as String?
-        val base = arr[5] as String?
+        settingsSnapshot,
+    ) { local, list, connected, snap ->
         local.copy(
             playlists = list,
             connectedId = connected?.id,
-            macAddress = mac.orEmpty(),
-            deviceKey = deviceKey.orEmpty(),
-            panelBaseUrl = base.orEmpty(),
+            macAddress = snap.mac,
+            deviceKey = snap.deviceKey,
+            panelBaseUrl = snap.panelBaseUrl,
         )
     }.stateIn(
         scope = viewModelScope,
@@ -83,7 +92,7 @@ class PlaylistViewModel @Inject constructor(
         it.copy(activationCode = value, addError = null)
     }
 
-    fun submitActivationCode() {
+    fun submitActivationCode(onConnected: () -> Unit) {
         val code = _local.value.activationCode.trim()
         if (code.isEmpty()) {
             _local.update { it.copy(addError = "Enter an activation code") }
@@ -93,16 +102,48 @@ class PlaylistViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val base = settings.panelBaseUrl.first().orEmpty()
-                val token = settings.playerToken.first().orEmpty()
-                if (base.isBlank() || token.isBlank()) {
-                    _local.update { it.copy(adding = false, addError = "Not signed in") }
+                    .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+                val mac = deviceMac.current()
+                val resp = api.activatePlaylist(base, mac, code)
+                // First activation on this device creates a MacUser on the panel
+                // and returns a fresh session — persist it so later API calls work.
+                val token = resp.token
+                if (!token.isNullOrBlank()) {
+                    settings.savePanelSession(
+                        baseUrl = base,
+                        token = token,
+                        macAddress = mac,
+                        expireAtIso = resp.expireAt,
+                        deviceKeyValue = resp.deviceKey,
+                    )
+                }
+                repo.savePlaylistsFromApi(resp.playlists)
+
+                // Auto-connect to the freshly-activated playlist and fetch channels
+                // so the user lands on populated content, not an empty Home.
+                val added = resp.added
+                    ?: resp.playlists.lastOrNull()
+                if (added == null) {
+                    _local.update {
+                        it.copy(adding = false, addError = "Activation returned no playlist")
+                    }
                     return@launch
                 }
-                val resp = api.activatePlaylist(base, token, code)
-                repo.savePlaylistsFromApi(resp.playlists)
+                repo.setConnected(added.id)
+                val refresh = repo.refreshPlaylist(added.playlistUrl)
+                refresh.onFailure { t ->
+                    _local.update {
+                        it.copy(
+                            adding = false,
+                            addError = "Activated, but channels failed to load: ${t.message ?: "unknown error"}",
+                        )
+                    }
+                    return@launch
+                }
                 _local.update {
                     it.copy(adding = false, addDialogOpen = false, activationCode = "")
                 }
+                onConnected()
             } catch (e: PlayerApiException) {
                 _local.update { it.copy(adding = false, addError = e.message) }
             } catch (e: Exception) {

@@ -24,7 +24,7 @@ interface MacUser {
   macAddress: string;
   username: string;
   password: string;
-  protection: string;
+  protection: boolean;
   url: string;
 }
 
@@ -136,8 +136,8 @@ export default function MacUsersPage() {
                       <TableCell className="font-mono text-sm">{user.macAddress}</TableCell>
                       <TableCell>{user.username}</TableCell>
                       <TableCell>
-                        <Badge variant={user.protection === "YES" ? "default" : "secondary"}>
-                          {user.protection}
+                        <Badge variant={user.protection ? "default" : "secondary"}>
+                          {user.protection ? "YES" : "NO"}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground max-w-[200px] truncate">

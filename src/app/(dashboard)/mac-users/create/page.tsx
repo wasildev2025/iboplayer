@@ -3,12 +3,12 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { M3uExtractor } from "@/components/shared/m3u-extractor";
+import { M3uExtractor, type ExtractedM3u } from "@/components/shared/m3u-extractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, UserPlus } from "lucide-react";
+import { Loader2, Save, UserPlus, Link2 } from "lucide-react";
 import { toast } from "sonner";
 
 export default function CreateMacUserPage() {
@@ -16,25 +16,39 @@ export default function CreateMacUserPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [form, setForm] = useState({
     macAddress: "",
-    protection: "NO",
+    protection: false,
     title: "",
     url: "",
     username: "",
     password: "",
+    dnsId: null as number | null,
+    dnsTitle: "",
   });
 
-  const updateField = (field: string, value: string) => {
+  const updateField = (field: string, value: string | boolean | number | null) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleExtract = (data: { url: string; username: string; password: string }) => {
+  const handleExtract = (data: ExtractedM3u) => {
     setForm((prev) => ({
       ...prev,
       url: data.url,
       username: data.username,
       password: data.password,
+      dnsId: data.dnsId,
+      dnsTitle: data.dnsTitle,
     }));
     toast.success("M3U data extracted");
+  };
+
+  const handleUrlChange = (value: string) => {
+    setForm((prev) => ({
+      ...prev,
+      url: value,
+      // Manual edit breaks the DNS link — the user is entering a raw URL.
+      dnsId: null,
+      dnsTitle: "",
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -44,7 +58,15 @@ export default function CreateMacUserPage() {
       const res = await fetch("/api/mac-users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          macAddress: form.macAddress,
+          protection: form.protection,
+          title: form.title,
+          url: form.url,
+          username: form.username,
+          password: form.password,
+          dnsId: form.dnsId,
+        }),
       });
       if (!res.ok) throw new Error("Failed to create");
       toast.success("MAC user created successfully");
@@ -86,8 +108,8 @@ export default function CreateMacUserPage() {
                 <Label htmlFor="protection">Protection</Label>
                 <select
                   id="protection"
-                  value={form.protection}
-                  onChange={(e) => updateField("protection", e.target.value)}
+                  value={form.protection ? "YES" : "NO"}
+                  onChange={(e) => updateField("protection", e.target.value === "YES")}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="YES">YES</option>
@@ -105,14 +127,20 @@ export default function CreateMacUserPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="url">URL</Label>
+                <Label htmlFor="url">DNS / URL</Label>
                 <Input
                   id="url"
                   value={form.url}
-                  onChange={(e) => updateField("url", e.target.value)}
+                  onChange={(e) => handleUrlChange(e.target.value)}
                   placeholder="https://..."
                   required
                 />
+                {form.dnsId && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Link2 className="h-3 w-3" />
+                    Linked to DNS: <span className="font-medium">{form.dnsTitle}</span> (id {form.dnsId})
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label htmlFor="username">Username</Label>

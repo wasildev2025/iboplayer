@@ -51,6 +51,7 @@ export async function POST(req: Request) {
       url: data.url,
       username: data.username,
       password: data.password,
+      dnsId: typeof data.dnsId === "number" ? data.dnsId : null,
     },
   });
   return NextResponse.json(item);

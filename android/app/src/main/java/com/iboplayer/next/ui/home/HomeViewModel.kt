@@ -1,19 +1,19 @@
 package com.iboplayer.next.ui.home
 
+import android.content.Context
 import android.content.pm.PackageManager
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.iboplayer.next.AppConfig
 import com.iboplayer.next.data.PlaylistRepository
 import com.iboplayer.next.data.SettingsStore
 import com.iboplayer.next.data.remote.PlayerApi
-import com.iboplayer.next.data.remote.PlayerApiException
+import com.iboplayer.next.util.DeviceMac
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
-import android.content.Context
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
@@ -30,6 +30,7 @@ class HomeViewModel @Inject constructor(
     private val settings: SettingsStore,
     private val repo: PlaylistRepository,
     private val api: PlayerApi,
+    private val deviceMac: DeviceMac,
 ) : ViewModel() {
 
     data class UiState(
@@ -37,6 +38,7 @@ class HomeViewModel @Inject constructor(
         val appVersion: String = "4.0",
         val reloading: Boolean = false,
         val reloadError: String? = null,
+        val hasConnectedPlaylist: Boolean = false,
     )
 
     private val _local = MutableStateFlow(UiState(appVersion = context.appVersionName()))
@@ -44,37 +46,83 @@ class HomeViewModel @Inject constructor(
     val state: StateFlow<UiState> = combine(
         _local,
         settings.expireAt,
-    ) { local, expire ->
-        local.copy(expiresLabel = formatExpires(expire))
+        repo.connectedPlaylist,
+    ) { local, expire, connected ->
+        local.copy(
+            expiresLabel = formatExpires(expire),
+            hasConnectedPlaylist = connected != null,
+        )
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
         initialValue = _local.value,
     )
 
-    /** Re-fetch playlists from the panel and refresh the active playlist's channels. */
+    init {
+        viewModelScope.launch { bootstrap() }
+    }
+
+    /**
+     * First-boot session + playlist priming. Silent-fails on offline or missing
+     * MacUser — the Home tiles are still usable; Playlist screen shows the gap.
+     */
+    private suspend fun bootstrap() {
+        val base = settings.panelBaseUrl.first().orEmpty()
+            .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+        val existingToken = settings.playerToken.first().orEmpty()
+
+        runCatching {
+            if (existingToken.isBlank()) {
+                val login = api.login(base, deviceMac.current(), null)
+                val token = login.token ?: return@runCatching
+                settings.savePanelSession(
+                    baseUrl = base,
+                    token = token,
+                    macAddress = deviceMac.current(),
+                    expireAtIso = login.expireAt,
+                    deviceKeyValue = login.deviceKey,
+                )
+                repo.savePlaylistsFromApi(login.playlists)
+            } else {
+                val resp = api.playlists(base, existingToken)
+                repo.savePlaylistsFromApi(resp.playlists)
+            }
+        }
+
+        // If a playlist is already connected, make sure channels are fresh.
+        repo.getConnected()?.let { repo.refreshPlaylist(it.playlistUrl) }
+    }
+
+    /** Pull fresh playlists from panel; refresh connected playlist's channels. */
     fun reload(onDone: () -> Unit) {
         _local.update { it.copy(reloading = true, reloadError = null) }
         viewModelScope.launch {
-            try {
-                val base = settings.panelBaseUrl.first().orEmpty()
-                val token = settings.playerToken.first().orEmpty()
-                if (base.isBlank() || token.isBlank()) {
-                    _local.update { it.copy(reloading = false, reloadError = "Not signed in") }
-                    return@launch
+            val base = settings.panelBaseUrl.first().orEmpty()
+                .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+            val token = settings.playerToken.first().orEmpty()
+            val result = runCatching {
+                if (token.isBlank()) {
+                    val login = api.login(base, deviceMac.current(), null)
+                    val newToken = login.token ?: error("No token")
+                    settings.savePanelSession(
+                        baseUrl = base,
+                        token = newToken,
+                        macAddress = deviceMac.current(),
+                        expireAtIso = login.expireAt,
+                        deviceKeyValue = login.deviceKey,
+                    )
+                    repo.savePlaylistsFromApi(login.playlists)
+                } else {
+                    val resp = api.playlists(base, token)
+                    repo.savePlaylistsFromApi(resp.playlists)
                 }
-                val resp = api.playlists(base, token)
-                repo.savePlaylistsFromApi(resp.playlists)
-                val connected = repo.getConnected()
-                if (connected != null) {
-                    repo.refreshPlaylist(connected.playlistUrl)
-                }
+                repo.getConnected()?.let { repo.refreshPlaylist(it.playlistUrl) }
+            }
+            result.onFailure { t ->
+                _local.update { it.copy(reloading = false, reloadError = t.message) }
+            }.onSuccess {
                 _local.update { it.copy(reloading = false) }
                 onDone()
-            } catch (e: PlayerApiException) {
-                _local.update { it.copy(reloading = false, reloadError = e.message) }
-            } catch (e: Exception) {
-                _local.update { it.copy(reloading = false, reloadError = e.message) }
             }
         }
     }

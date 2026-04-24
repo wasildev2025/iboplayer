@@ -29,7 +29,7 @@ export async function POST(req: Request) {
     const trials = await prisma.trial.findMany();
     const trial = trials.find((t) => normalizeMac(t.macAddress) === mac);
 
-    const macUserRows = await prisma.macUser.findMany();
+    const macUserRows = await prisma.macUser.findMany({ include: { dns: true } });
     const macUser = macUserRows.find((u) => normalizeMac(u.macAddress) === mac);
 
     if (!macUser && trial && trial.expireDate < new Date()) {
@@ -39,6 +39,7 @@ export async function POST(req: Request) {
     if (activationCode) {
       const codeRow = await prisma.activationCode.findFirst({
         where: { code: activationCode },
+        include: { dns: true },
       });
       if (!codeRow) {
         return NextResponse.json({ error: "Invalid activation code" }, { status: 401 });

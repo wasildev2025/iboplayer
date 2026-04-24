@@ -16,7 +16,11 @@ model User {
 model Dns {
   id    Int    @id @default(autoincrement())
   title String
-  url   String
+  url   String @unique
+
+  macUsers        MacUser[]
+  activationCodes ActivationCode[]
+  playlists       Playlist[]
 }
 
 model MacUser {
@@ -27,9 +31,12 @@ model MacUser {
   url        String
   username   String
   password   String
+  dnsId      Int?    @map("dns_id")
 
+  dns       Dns?       @relation(fields: [dnsId], references: [id], onDelete: SetNull)
   playlists Playlist[]
 
+  @@index([dnsId])
   @@map("mac_users")
 }
 
@@ -42,10 +49,13 @@ model Playlist {
   password   String  @default("")
   protection Boolean @default(false)
   pin        String?
+  dnsId      Int?    @map("dns_id")
 
   macUser MacUser @relation(fields: [macUserId], references: [id], onDelete: Cascade)
+  dns     Dns?    @relation(fields: [dnsId], references: [id], onDelete: SetNull)
 
   @@index([macUserId])
+  @@index([dnsId])
   @@map("playlists")
 }
 
@@ -56,7 +66,11 @@ model ActivationCode {
   username String
   password String
   status   String @default("NotUsed")
+  dnsId    Int?   @map("dns_id")
 
+  dns Dns? @relation(fields: [dnsId], references: [id], onDelete: SetNull)
+
+  @@index([dnsId])
   @@map("activation_codes")
 }
 

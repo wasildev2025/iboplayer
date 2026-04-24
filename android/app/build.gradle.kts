@@ -17,9 +17,26 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+
+        // Panel base URL baked into the APK. Override per build variant below.
+        buildConfigField(
+            "String",
+            "PANEL_BASE_URL",
+            "\"https://panel.example.com\"",
+        )
     }
 
     buildTypes {
+        debug {
+            // Dev builds point at your LAN dev server.
+            //   - Android emulator:  http://10.0.2.2:3000  (alias for host localhost)
+            //   - Real device:       http://<dev-machine-LAN-IP>:3000  (e.g. 192.168.18.42)
+            buildConfigField(
+                "String",
+                "PANEL_BASE_URL",
+                "\"http://192.168.18.91:3000\"",
+            )
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -41,6 +58,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
@@ -85,6 +103,9 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+
+    // QR code generation
+    implementation(libs.zxing.core)
 
     debugImplementation(libs.androidx.ui.tooling)
 }
