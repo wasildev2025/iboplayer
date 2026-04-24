@@ -28,7 +28,25 @@ model MacUser {
   username   String
   password   String
 
+  playlists Playlist[]
+
   @@map("mac_users")
+}
+
+model Playlist {
+  id         Int     @id @default(autoincrement())
+  macUserId  Int     @map("mac_user_id")
+  title      String
+  url        String
+  username   String  @default("")
+  password   String  @default("")
+  protection Boolean @default(false)
+  pin        String?
+
+  macUser MacUser @relation(fields: [macUserId], references: [id], onDelete: Cascade)
+
+  @@index([macUserId])
+  @@map("playlists")
 }
 
 model ActivationCode {

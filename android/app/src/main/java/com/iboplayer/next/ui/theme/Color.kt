@@ -2,20 +2,20 @@ package com.iboplayer.next.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/** Premium IPTV panel accent (gold) — activation / focus */
-val AccentGold = Color(0xFFE8A94A)
-val AccentGoldDim = Color(0x99E8A94A)
-val AccentOrange = Color(0xFFF97316)
+val ProtonOrange = Color(0xFFF59E29)
+val ProtonOrangeDim = Color(0xCCF59E29)
+val ProtonGold = Color(0xFFE8A94A)
 
-val Primary = Color(0xFF3F6BFF)
-val OnPrimary = Color(0xFFFFFFFF)
-val PrimaryContainer = Color(0xFFDBE2FF)
-val OnPrimaryContainer = Color(0xFF001550)
+val ProtonNavy = Color(0xFF0B1320)
+val ProtonNavyDeep = Color(0xFF050A14)
+val ProtonSurface = Color(0xFF111C2E)
+val ProtonSurfaceTranslucent = Color(0x80111C2E)
+val ProtonOutline = Color(0x66F59E29)
 
-val DarkPrimary = Color(0xFFB4C5FF)
-val DarkOnPrimary = Color(0xFF002780)
-val DarkPrimaryContainer = Color(0xFF1E3FB6)
-val DarkOnPrimaryContainer = Color(0xFFDBE2FF)
+val ProtonText = Color(0xFFF1F5F9)
+val ProtonTextMuted = Color(0xFFB6C0CC)
 
-val DarkBackground = Color(0xFF101214)
-val DarkSurface = Color(0xFF181A1D)
+val Primary = ProtonOrange
+val OnPrimary = Color(0xFF0B1320)
+val PrimaryContainer = Color(0xFF7A4912)
+val OnPrimaryContainer = Color(0xFFFFE7C6)

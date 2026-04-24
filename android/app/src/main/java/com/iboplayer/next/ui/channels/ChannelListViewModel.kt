@@ -80,7 +80,7 @@ class ChannelListViewModel @Inject constructor(
     fun resetSession(onDone: () -> Unit) {
         viewModelScope.launch {
             settings.clear()
-            repo.clearCache()
+            repo.clearChannelCache()
             onDone()
         }
     }

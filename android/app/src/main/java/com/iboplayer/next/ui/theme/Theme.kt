@@ -1,49 +1,55 @@
 package com.iboplayer.next.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 
-private val LightColors = lightColorScheme(
-    primary = Primary,
-    onPrimary = OnPrimary,
-    primaryContainer = PrimaryContainer,
-    onPrimaryContainer = OnPrimaryContainer,
-)
-
-private val DarkColors = darkColorScheme(
-    primary = DarkPrimary,
-    onPrimary = DarkOnPrimary,
-    primaryContainer = DarkPrimaryContainer,
-    onPrimaryContainer = DarkOnPrimaryContainer,
-    background = DarkBackground,
-    surface = DarkSurface,
+private val ProtonColors = darkColorScheme(
+    primary = ProtonOrange,
+    onPrimary = Color(0xFF0B1320),
+    primaryContainer = ProtonOrangeDim,
+    onPrimaryContainer = Color(0xFFFFE7C6),
+    secondary = ProtonGold,
+    onSecondary = Color(0xFF0B1320),
+    background = ProtonNavyDeep,
+    onBackground = ProtonText,
+    surface = ProtonSurface,
+    onSurface = ProtonText,
+    surfaceVariant = ProtonSurfaceTranslucent,
+    onSurfaceVariant = ProtonTextMuted,
+    outline = ProtonOutline,
+    error = Color(0xFFEF5350),
+    onError = Color.White,
 )
 
 @Composable
-fun IboPlayerTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit,
-) {
-    val context = LocalContext.current
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColors
-        else -> LightColors
-    }
-
+fun IboPlayerTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = ProtonColors,
         content = content,
     )
+}
+
+/** Stadium-style background: dark navy → deeper navy radial-ish gradient. */
+@Composable
+fun ProtonBackground(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    0.0f to Color(0xFF1A2A40),
+                    0.5f to ProtonNavy,
+                    1.0f to ProtonNavyDeep,
+                )
+            )
+    ) {
+        content()
+    }
 }

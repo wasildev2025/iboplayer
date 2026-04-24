@@ -78,6 +78,29 @@ class PlayerApi @Inject constructor(
             }
         }
 
+    suspend fun activatePlaylist(
+        baseUrl: String,
+        bearerToken: String,
+        activationCode: String,
+    ): ActivateResponseDto = withContext(Dispatchers.IO) {
+        val url = joinBase(baseUrl, "/api/player/playlists/activate")
+        val payload = buildJsonObject {
+            put("activationCode", JsonPrimitive(activationCode.trim()))
+        }
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .post(payload.toString().toRequestBody(jsonMedia))
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw PlayerApiException(parseError(body, response.code))
+            }
+            PlayerJson.json.decodeFromString<ActivateResponseDto>(body)
+        }
+    }
+
     private fun parseError(body: String, code: Int): String {
         return try {
             val err = PlayerJson.json.decodeFromString<ApiErrorDto>(body)

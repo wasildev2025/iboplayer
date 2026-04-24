@@ -31,8 +31,6 @@ class SetupViewModel @Inject constructor(
         val loginSubtitle: String = "",
         val loading: Boolean = false,
         val error: String? = null,
-        val showManualM3u: Boolean = false,
-        val manualM3uUrl: String = "",
     )
 
     private val _state = MutableStateFlow(UiState())
@@ -43,10 +41,6 @@ class SetupViewModel @Inject constructor(
             val savedBase = settings.panelBaseUrl.first()
             if (!savedBase.isNullOrBlank()) {
                 _state.update { it.copy(panelBaseUrl = savedBase) }
-            }
-            val savedPl = settings.playlistUrl.first()
-            if (!savedPl.isNullOrBlank()) {
-                _state.update { it.copy(manualM3uUrl = savedPl, showManualM3u = true) }
             }
         }
     }
@@ -59,14 +53,11 @@ class SetupViewModel @Inject constructor(
         _state.update { it.copy(activationCode = value, error = null) }
     }
 
-    fun onManualUrlChange(value: String) {
-        _state.update { it.copy(manualM3uUrl = value, error = null) }
-    }
-
-    fun setShowManual(show: Boolean) {
-        _state.update { it.copy(showManualM3u = show, error = null) }
-    }
-
+    /**
+     * First-time login: register MAC against the panel, persist session, save the
+     * returned playlists to local DB. Connection of a specific playlist happens
+     * on the Playlist screen (or in the activation-code add flow).
+     */
     fun loginWithPanel(onSuccess: () -> Unit) {
         val base = _state.value.panelBaseUrl.trim().trimEnd('/')
         val mac = _state.value.macAddress
@@ -89,18 +80,14 @@ class SetupViewModel @Inject constructor(
                 }
                 val login = api.login(base, mac, activationOptional)
                 val token = login.token ?: throw IllegalStateException("No token")
-                val first =
-                    login.playlists.firstOrNull()
-                        ?: throw IllegalStateException("No playlists returned")
                 settings.savePanelSession(
                     baseUrl = base,
                     token = token,
-                    playlistUrl = first.playlistUrl,
+                    macAddress = mac,
                     expireAtIso = login.expireAt,
                     deviceKeyValue = login.deviceKey,
                 )
-                repo.refreshPlaylist(first.playlistUrl).getOrElse { throw it }
-                if (!repo.hasCache()) throw IllegalStateException("Playlist has no channels")
+                repo.savePlaylistsFromApi(login.playlists)
                 _state.update { it.copy(loading = false) }
                 onSuccess()
             } catch (e: PlayerApiException) {
@@ -110,35 +97,6 @@ class SetupViewModel @Inject constructor(
                     it.copy(loading = false, error = e.message ?: "Login failed")
                 }
             }
-        }
-    }
-
-    fun loadManualM3u(onSuccess: () -> Unit) {
-        val url = _state.value.manualM3uUrl.trim()
-        if (url.isBlank()) return
-        _state.update { it.copy(loading = true, error = null) }
-        viewModelScope.launch {
-            repo.refreshPlaylist(url)
-                .onSuccess {
-                    if (!repo.hasCache()) {
-                        _state.update {
-                            it.copy(loading = false, error = "Playlist has no channels")
-                        }
-                        return@launch
-                    }
-                    settings.clear()
-                    settings.savePlaylistUrl(url)
-                    _state.update { it.copy(loading = false) }
-                    onSuccess()
-                }
-                .onFailure { t ->
-                    _state.update {
-                        it.copy(
-                            loading = false,
-                            error = t.message ?: "Failed to load playlist",
-                        )
-                    }
-                }
         }
     }
 }

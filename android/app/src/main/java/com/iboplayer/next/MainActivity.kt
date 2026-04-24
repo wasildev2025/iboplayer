@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
             isAppearanceLightNavigationBars = false
         }
         setContent {
-            IboPlayerTheme(darkTheme = true, dynamicColor = false) {
+            IboPlayerTheme {
                 AppNavHost()
             }
         }

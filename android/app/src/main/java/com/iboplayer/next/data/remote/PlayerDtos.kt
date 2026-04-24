@@ -34,6 +34,7 @@ data class PlaylistItemDto(
     val title: String,
     val playlistUrl: String,
     val protection: Boolean = false,
+    val pin: String? = null,
 )
 
 @Serializable
@@ -42,6 +43,12 @@ data class LoginResponseDto(
     val playlists: List<PlaylistItemDto> = emptyList(),
     val expireAt: String? = null,
     val deviceKey: String? = null,
+)
+
+@Serializable
+data class ActivateResponseDto(
+    val playlists: List<PlaylistItemDto> = emptyList(),
+    val added: PlaylistItemDto? = null,
 )
 
 @Serializable

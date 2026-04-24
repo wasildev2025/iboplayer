@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeMac } from "@/lib/mac";
 import {
+  playlistsForMacUser,
   playlistsFromActivation,
-  playlistsFromMacUser,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
 import { deviceKeyFromMac, signPlayerToken } from "@/lib/player-jwt";
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const playlists = playlistsFromMacUser(macUser);
+    const playlists = await playlistsForMacUser(macUser);
     const token = signPlayerToken({ sub: `macUser:${macUser.id}`, mac });
     const expireAt = await trialExpireIsoForMac(mac);
 

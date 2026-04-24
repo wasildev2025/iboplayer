@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import com.iboplayer.next.data.local.AppDatabase
 import com.iboplayer.next.data.local.ChannelDao
+import com.iboplayer.next.data.local.PlaylistDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,11 +34,18 @@ object DataModule {
             context,
             AppDatabase::class.java,
             "ibo_player.db"
-        ).build()
+        )
+            .fallbackToDestructiveMigration(dropAllTables = true)
+            .build()
     }
 
     @Provides
     fun provideChannelDao(database: AppDatabase): ChannelDao {
         return database.channelDao()
+    }
+
+    @Provides
+    fun providePlaylistDao(database: AppDatabase): PlaylistDao {
+        return database.playlistDao()
     }
 }

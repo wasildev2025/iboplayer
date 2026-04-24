@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeMac } from "@/lib/mac";
 import {
+  playlistsForMacUser,
   playlistsFromActivation,
-  playlistsFromMacUser,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
 import { deviceKeyFromMac, verifyPlayerToken } from "@/lib/player-jwt";
@@ -32,7 +32,7 @@ export async function GET(req: Request) {
   if (kind === "macUser") {
     const row = await prisma.macUser.findUnique({ where: { id } });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const playlists = playlistsFromMacUser(row);
+    const playlists = await playlistsForMacUser(row);
     const expireAt = await trialExpireIsoForMac(normMac);
     return NextResponse.json({
       playlists,
