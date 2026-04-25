@@ -120,8 +120,10 @@ class PlaylistViewModel @Inject constructor(
                 }
                 repo.savePlaylistsFromApi(resp.playlists)
 
-                // Auto-connect to the freshly-activated playlist and fetch channels
-                // so the user lands on populated content, not an empty Home.
+                // Channels are fetched + parsed by the server (triggered when
+                // the activation code's profile was created), so the device
+                // doesn't pull the M3U itself anymore. We just connect the
+                // newly-added playlist and navigate.
                 val added = resp.added
                     ?: resp.playlists.lastOrNull()
                 if (added == null) {
@@ -131,16 +133,6 @@ class PlaylistViewModel @Inject constructor(
                     return@launch
                 }
                 repo.setConnected(added.id)
-                val refresh = repo.refreshPlaylist(added.playlistUrl)
-                refresh.onFailure { t ->
-                    _local.update {
-                        it.copy(
-                            adding = false,
-                            addError = "Activated, but channels failed to load: ${t.message ?: "unknown error"}",
-                        )
-                    }
-                    return@launch
-                }
                 _local.update {
                     it.copy(adding = false, addDialogOpen = false, activationCode = "")
                 }
@@ -182,9 +174,9 @@ class PlaylistViewModel @Inject constructor(
 
     private fun connect(playlist: PlaylistEntity, onConnected: () -> Unit) {
         _local.update { it.copy(connecting = true) }
+        // No client-side M3U fetch — channels are server-side now.
         viewModelScope.launch {
             repo.setConnected(playlist.id)
-            repo.refreshPlaylist(playlist.playlistUrl)
             _local.update { it.copy(connecting = false) }
             onConnected()
         }

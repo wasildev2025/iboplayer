@@ -56,3 +56,34 @@ data class ActivateResponseDto(
 
 @Serializable
 data class ApiErrorDto(val error: String = "Request failed")
+
+@Serializable
+data class ChannelDto(
+    val id: Int,
+    val externalId: String,
+    val name: String,
+    val url: String,
+    val logo: String? = null,
+    val groupName: String? = null,
+    val category: String,
+)
+
+@Serializable
+data class ChannelPageDto(
+    val data: List<ChannelDto> = emptyList(),
+    val page: Int = 1,
+    val pageSize: Int = 50,
+    val total: Int = 0,
+    val totalPages: Int = 1,
+)
+
+@Serializable
+data class ChannelGroupDto(
+    val groupName: String,
+    val count: Int,
+)
+
+@Serializable
+data class ChannelGroupsResponseDto(
+    val data: List<ChannelGroupDto> = emptyList(),
+)

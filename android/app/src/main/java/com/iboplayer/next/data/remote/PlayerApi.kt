@@ -82,6 +82,74 @@ class PlayerApi @Inject constructor(
             }
         }
 
+    /**
+     * Fetch a page of channels for the connected playlist. Bearer-authed,
+     * scoped to the device's profile via `playlistId` ownership check.
+     */
+    suspend fun channels(
+        baseUrl: String,
+        bearerToken: String,
+        playlistId: Int,
+        category: String? = null,
+        group: String? = null,
+        search: String = "",
+        page: Int = 1,
+        pageSize: Int = 50,
+    ): ChannelPageDto = withContext(Dispatchers.IO) {
+        val params = buildString {
+            append("?playlistId=").append(playlistId)
+            category?.takeIf { it.isNotBlank() }
+                ?.let { append("&category=").append(it) }
+            group?.takeIf { it.isNotBlank() }
+                ?.let { append("&group=").append(java.net.URLEncoder.encode(it, "UTF-8")) }
+            if (search.isNotBlank()) {
+                append("&search=").append(java.net.URLEncoder.encode(search, "UTF-8"))
+            }
+            append("&page=").append(page)
+            append("&pageSize=").append(pageSize)
+        }
+        val url = joinBase(baseUrl, "/api/player/channels$params")
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw PlayerApiException(parseError(body, response.code))
+            }
+            PlayerJson.json.decodeFromString<ChannelPageDto>(body)
+        }
+    }
+
+    /** Group + count buckets for the chip strip in BrowseScreen. */
+    suspend fun channelGroups(
+        baseUrl: String,
+        bearerToken: String,
+        playlistId: Int,
+        category: String? = null,
+    ): ChannelGroupsResponseDto = withContext(Dispatchers.IO) {
+        val params = buildString {
+            append("?playlistId=").append(playlistId)
+            category?.takeIf { it.isNotBlank() }
+                ?.let { append("&category=").append(it) }
+        }
+        val url = joinBase(baseUrl, "/api/player/channels/groups$params")
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) {
+                throw PlayerApiException(parseError(body, response.code))
+            }
+            PlayerJson.json.decodeFromString<ChannelGroupsResponseDto>(body)
+        }
+    }
+
     suspend fun activatePlaylist(
         baseUrl: String,
         macAddress: String,

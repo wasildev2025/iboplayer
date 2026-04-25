@@ -41,13 +41,52 @@ model CredentialProfile {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  dns             Dns              @relation(fields: [dnsId], references: [id], onDelete: Restrict)
+  dns             Dns                  @relation(fields: [dnsId], references: [id], onDelete: Restrict)
   activationCodes ActivationCode[]
   playlists       Playlist[]
+  channels        Channel[]
+  refreshLog      ChannelRefreshLog?
 
   @@unique([dnsId, username, password])
   @@index([dnsId])
   @@map("credential_profiles")
+}
+
+/// Cached channel rows pulled from a profile's M3U. Server fetches +
+/// parses + stores once per profile; the player API serves paginated
+/// reads. Replaces the per-device Room channel cache in older builds.
+model Channel {
+  id         Int     @id @default(autoincrement())
+  profileId  Int     @map("profile_id")
+  externalId String  @map("external_id") // tvg-id when present, else hash
+  name       String
+  url        String
+  logo       String?
+  groupName  String? @map("group_name")
+  category   String                       // live | movies | series | sports
+
+  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, externalId])
+  @@index([profileId, category])
+  @@index([profileId, category, groupName])
+  @@map("channels")
+}
+
+/// Tracks the most recent (or in-progress) M3U refresh for a profile.
+/// One row per profile — updated in place on each refresh.
+model ChannelRefreshLog {
+  id            Int      @id @default(autoincrement())
+  profileId     Int      @unique @map("profile_id")
+  status        String   // running | success | failed
+  channelCount  Int      @default(0) @map("channel_count")
+  error         String?
+  startedAt     DateTime @default(now()) @map("started_at")
+  finishedAt    DateTime? @map("finished_at")
+
+  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("channel_refresh_logs")
 }
 
 /// A code an end-user enters in the player to claim a playlist slot. The

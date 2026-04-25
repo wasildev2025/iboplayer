@@ -5,6 +5,7 @@ import {
   profileFromM3uUrl,
   upsertCredentialProfile,
 } from "@/lib/credential-profiles";
+import { triggerRefreshAsync } from "@/lib/channel-refresh";
 
 /**
  * List credential profiles with usage counts. Search matches title, DNS
@@ -85,6 +86,8 @@ export async function POST(req: Request) {
 
     if (typeof body.m3uUrl === "string" && body.m3uUrl.trim()) {
       const profile = await profileFromM3uUrl(body.m3uUrl.trim(), { title });
+      // Kick off channel ingest in the background so the admin doesn't wait.
+      triggerRefreshAsync(profile.id);
       return NextResponse.json(profile);
     }
 
@@ -103,6 +106,7 @@ export async function POST(req: Request) {
       password,
       title,
     });
+    triggerRefreshAsync(profile.id);
     return NextResponse.json(profile);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to upsert profile";

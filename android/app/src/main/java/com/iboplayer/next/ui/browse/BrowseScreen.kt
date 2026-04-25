@@ -20,9 +20,13 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.paging.LoadState
+import androidx.paging.compose.LazyPagingItems
+import androidx.paging.compose.collectAsLazyPagingItems
+import androidx.paging.compose.itemKey
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
@@ -78,7 +82,11 @@ fun BrowseScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
+    val channels = viewModel.channelPages.collectAsLazyPagingItems()
     var searchOpen by remember { mutableStateOf(false) }
+
+    val isInitialLoading = channels.loadState.refresh is LoadState.Loading
+    val isEmpty = channels.itemCount == 0 && channels.loadState.refresh is LoadState.NotLoading
 
     ProtonBackground {
         Column(
@@ -109,19 +117,22 @@ fun BrowseScreen(
 
             SectionHeader(
                 selectedGroup = state.selectedGroup,
-                count = state.items.size,
+                count = channels.itemCount,
             )
 
             PullToRefreshBox(
                 isRefreshing = refreshing,
-                onRefresh = viewModel::refresh,
+                onRefresh = {
+                    viewModel.refresh()
+                    channels.refresh()
+                },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
-                    state.items.isEmpty() && refreshing -> LoadingState()
-                    state.items.isEmpty() -> EmptyState()
+                    isInitialLoading && channels.itemCount == 0 -> LoadingState()
+                    isEmpty -> EmptyState()
                     else -> PosterGrid(
-                        items = state.items,
+                        items = channels,
                         onPlay = onPlay,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -362,7 +373,7 @@ private fun SectionHeader(selectedGroup: String?, count: Int) {
 
 @Composable
 private fun PosterGrid(
-    items: List<Channel>,
+    items: LazyPagingItems<Channel>,
     onPlay: (Channel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -373,8 +384,24 @@ private fun PosterGrid(
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         modifier = modifier,
     ) {
-        items(items, key = { it.id }) { channel ->
+        items(
+            count = items.itemCount,
+            key = items.itemKey { it.id },
+        ) { index ->
+            val channel = items[index] ?: return@items
             PosterTile(channel = channel, onClick = { onPlay(channel) })
+        }
+        if (items.loadState.append is LoadState.Loading) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CircularProgressIndicator(color = ProtonOrange, strokeWidth = 2.dp)
+                }
+            }
         }
     }
 }

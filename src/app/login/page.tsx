@@ -143,7 +143,7 @@ export default function LoginPage() {
 
           <div className="mt-6 text-center">
             <p className="text-xs text-zinc-600">
-              &copy; 2026 S Player
+              &copy; 2026 IPTV Player
             </p>
           </div>
         </CardContent>

@@ -23,7 +23,7 @@ async function main() {
   });
 
   await prisma.notification.create({
-    data: { messageOne: "Welcome", messageTwo: "S Player V4.0" },
+    data: { messageOne: "Welcome", messageTwo: "IPTV Player V1.0" },
   });
 
   await prisma.macLength.create({ data: { length: 12 } });

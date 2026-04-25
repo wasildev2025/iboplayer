@@ -29,13 +29,15 @@ android {
 
     buildTypes {
         debug {
-            // Dev builds point at your LAN dev server.
+            // Debug builds currently point at production Vercel so installs on
+            // any device just work. To dev against a local Next.js server,
+            // swap this to your LAN URL and run `npm run dev`:
             //   - Android emulator:  http://10.0.2.2:3000  (alias for host localhost)
             //   - Real device:       http://<dev-machine-LAN-IP>:3000  (e.g. 192.168.18.42)
             buildConfigField(
                 "String",
                 "PANEL_BASE_URL",
-                "\"http://192.168.18.91:3000\"",
+                "\"https://iboplayer-pi.vercel.app\"",
             )
         }
         release {
@@ -104,6 +106,10 @@ dependencies {
     implementation(libs.room.runtime)
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
+
+    // Paging — channels are server-paginated, no local cache
+    implementation(libs.androidx.paging.runtime)
+    implementation(libs.androidx.paging.compose)
 
     // QR code generation
     implementation(libs.zxing.core)

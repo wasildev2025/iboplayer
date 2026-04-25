@@ -90,11 +90,10 @@ class HomeViewModel @Inject constructor(
             }
         }
 
-        // If a playlist is already connected, make sure channels are fresh.
-        repo.getConnected()?.let { repo.refreshPlaylist(it.playlistUrl) }
+        // Channels are managed server-side now — nothing to refresh locally.
     }
 
-    /** Pull fresh playlists from panel; refresh connected playlist's channels. */
+    /** Pull fresh playlists from panel. (Channels are server-side now.) */
     fun reload(onDone: () -> Unit) {
         _local.update { it.copy(reloading = true, reloadError = null) }
         viewModelScope.launch {
@@ -117,7 +116,7 @@ class HomeViewModel @Inject constructor(
                     val resp = api.playlists(base, token)
                     repo.savePlaylistsFromApi(resp.playlists)
                 }
-                repo.getConnected()?.let { repo.refreshPlaylist(it.playlistUrl) }
+                // Channels are server-side; no per-playlist M3U fetch needed here.
             }
             result.onFailure { t ->
                 _local.update { it.copy(reloading = false, reloadError = t.message) }

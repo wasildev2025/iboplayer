@@ -15,6 +15,9 @@ import {
   Sparkles,
   AlertTriangle,
   ArrowRight,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/m3u-parser";
@@ -53,6 +56,47 @@ export default function EditCredentialProfilePage() {
   const [m3uLink, setM3uLink] = useState("");
   const [pendingReplace, setPendingReplace] = useState<ParsedM3u | null>(null);
 
+  // Channel refresh status
+  type RefreshStatus = {
+    status: "never" | "running" | "success" | "failed";
+    channelCount: number;
+    error?: string | null;
+    startedAt?: string | null;
+    finishedAt?: string | null;
+  };
+  const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const loadRefreshStatus = async () => {
+    try {
+      const res = await fetch(`/api/credential-profiles/${id}/refresh-channels`);
+      if (res.ok) setRefreshStatus(await res.json());
+    } catch {
+      // ignore — status is informational
+    }
+  };
+
+  const handleManualRefresh = async () => {
+    setIsRefreshing(true);
+    try {
+      const res = await fetch(`/api/credential-profiles/${id}/refresh-channels`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Refresh failed");
+      }
+      const result = await res.json();
+      toast.success(`Pulled ${result.channelCount} channels`);
+      await loadRefreshStatus();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Refresh failed";
+      toast.error(msg);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -70,7 +114,18 @@ export default function EditCredentialProfilePage() {
       }
     };
     load();
+    loadRefreshStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  // Poll refresh status while a refresh is in progress (server-side or just
+  // triggered). 3-second cadence is fine since refresh typically takes seconds.
+  useEffect(() => {
+    if (refreshStatus?.status !== "running") return;
+    const handle = setInterval(loadRefreshStatus, 3000);
+    return () => clearInterval(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshStatus?.status]);
 
   const handlePreviewReplace = () => {
     const parsed = parseM3uUrl(m3uLink.trim());
@@ -178,6 +233,72 @@ export default function EditCredentialProfilePage() {
               <span className="text-sm text-muted-foreground">
                 will be affected by changes here
               </span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Channel cache status */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <RefreshCw className="h-5 w-5" />
+              Channel Cache
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-3 flex-wrap text-sm">
+              {refreshStatus?.status === "success" && (
+                <Badge variant="secondary" className="gap-1">
+                  <CheckCircle2 className="h-3 w-3" />
+                  {refreshStatus.channelCount} channels cached
+                </Badge>
+              )}
+              {refreshStatus?.status === "running" && (
+                <Badge variant="outline" className="gap-1">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Refreshing…
+                </Badge>
+              )}
+              {refreshStatus?.status === "failed" && (
+                <Badge variant="destructive" className="gap-1">
+                  <XCircle className="h-3 w-3" />
+                  Failed
+                </Badge>
+              )}
+              {(refreshStatus?.status === "never" || !refreshStatus) && (
+                <Badge variant="outline">Not yet fetched</Badge>
+              )}
+              {refreshStatus?.finishedAt && (
+                <span className="text-xs text-muted-foreground">
+                  last refresh{" "}
+                  {new Date(refreshStatus.finishedAt).toLocaleString()}
+                </span>
+              )}
+            </div>
+            {refreshStatus?.status === "failed" && refreshStatus.error && (
+              <div className="text-xs text-red-600 dark:text-red-400 rounded-md border border-red-500/30 bg-red-500/5 px-3 py-2">
+                {refreshStatus.error}
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-xs text-muted-foreground">
+                Channels are fetched + parsed on the server, then served to
+                devices via the player API. Refresh manually after the
+                provider rotates EPG or restocks VOD.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleManualRefresh}
+                disabled={isRefreshing || refreshStatus?.status === "running"}
+              >
+                {isRefreshing ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                )}
+                Refresh now
+              </Button>
             </div>
           </CardContent>
         </Card>

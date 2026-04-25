@@ -3,7 +3,6 @@ package com.iboplayer.next.di
 import android.content.Context
 import androidx.room.Room
 import com.iboplayer.next.data.local.AppDatabase
-import com.iboplayer.next.data.local.ChannelDao
 import com.iboplayer.next.data.local.PlaylistDao
 import dagger.Module
 import dagger.Provides
@@ -30,9 +29,9 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
-        // Channels are a refreshable cache (next reload re-pulls them from the
-        // panel), so destructive migration is safe and avoids hand-written
-        // migrations every time the channel schema evolves.
+        // Only Playlist rows live in Room now — channels come from the server
+        // paginated. Destructive migration is safe because everything in here
+        // is recoverable from the panel.
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
@@ -40,11 +39,6 @@ object DataModule {
         )
             .fallbackToDestructiveMigration()
             .build()
-    }
-
-    @Provides
-    fun provideChannelDao(database: AppDatabase): ChannelDao {
-        return database.channelDao()
     }
 
     @Provides

@@ -16,6 +16,8 @@ hilt = "2.52"
 room = "2.6.1"
 ksp = "2.0.21-1.0.27"
 zxing = "3.5.3"
+paging = "3.3.5"
+pagingCompose = "3.3.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -54,6 +56,9 @@ room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 
 zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxing" }
+
+androidx-paging-runtime = { group = "androidx.paging", name = "paging-runtime", version.ref = "paging" }
+androidx-paging-compose = { group = "androidx.paging", name = "paging-compose", version.ref = "pagingCompose" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

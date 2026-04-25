@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
 import { profileFromM3uUrl } from "@/lib/credential-profiles";
+import { triggerRefreshAsync } from "@/lib/channel-refresh";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const authError = await requireAuth();
@@ -106,6 +107,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       return p;
     });
+    // Credentials may have changed (M3U replace) — re-pull channels.
+    triggerRefreshAsync(updated.id);
     return NextResponse.json(updated);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update profile";
