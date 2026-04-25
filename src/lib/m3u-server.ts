@@ -25,12 +25,21 @@ const SPORT_KEYWORDS = [
 const SERIES_KEYWORDS = ["SERIES", "SERIE", "TV SHOW", "SEASON", "TELEFILM"];
 const MOVIE_KEYWORDS = ["MOVIE", "FILM", "CINEMA", "VOD"];
 
-function categorize(group: string | null): ChannelCategory {
-  if (!group) return "live";
-  const g = group.toUpperCase();
-  if (SPORT_KEYWORDS.some((k) => g.includes(k))) return "sports";
-  if (SERIES_KEYWORDS.some((k) => g.includes(k))) return "series";
-  if (MOVIE_KEYWORDS.some((k) => g.includes(k))) return "movies";
+export function categorize(group: string | null, url: string): ChannelCategory {
+  // URL path is the authoritative signal for Xtream-Codes feeds: VOD streams
+  // live under /movie/ or /series/ regardless of the group label. Group-title
+  // keywords (e.g. "TURKISH SERIES", "DRAMA") miss our keyword list, so URL-
+  // first avoids series/movies leaking into the Live tab.
+  const u = url.toLowerCase();
+  if (u.includes("/series/")) return "series";
+  if (u.includes("/movie/") || u.includes("/movies/")) return "movies";
+
+  if (group) {
+    const g = group.toUpperCase();
+    if (SPORT_KEYWORDS.some((k) => g.includes(k))) return "sports";
+    if (SERIES_KEYWORDS.some((k) => g.includes(k))) return "series";
+    if (MOVIE_KEYWORDS.some((k) => g.includes(k))) return "movies";
+  }
   return "live";
 }
 
@@ -91,7 +100,7 @@ export function parseM3u(text: string): ParsedChannel[] {
       url: line,
       logo: pendingAttrs["tvg-logo"]?.trim() || null,
       groupName: pendingGroup || null,
-      category: categorize(pendingGroup),
+      category: categorize(pendingGroup, line),
     });
     index += 1;
     pendingName = null;

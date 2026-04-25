@@ -177,6 +177,97 @@ class PlayerApi @Inject constructor(
         }
     }
 
+    /** List favorites for the device, scoped to the playlist's profile. */
+    suspend fun favorites(
+        baseUrl: String,
+        bearerToken: String,
+        playlistId: Int,
+    ): FavoritesResponseDto = withContext(Dispatchers.IO) {
+        val url = joinBase(baseUrl, "/api/player/favorites?playlistId=$playlistId")
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw PlayerApiException(parseError(body, response.code))
+            PlayerJson.json.decodeFromString<FavoritesResponseDto>(body)
+        }
+    }
+
+    /** Toggle favorite state for a channel. `on=true` adds, `on=false` removes. */
+    suspend fun toggleFavorite(
+        baseUrl: String,
+        bearerToken: String,
+        channelId: Int,
+        on: Boolean,
+    ): ToggleFavoriteResponseDto = withContext(Dispatchers.IO) {
+        val url = joinBase(baseUrl, "/api/player/favorites")
+        val payload = buildJsonObject {
+            put("channelId", JsonPrimitive(channelId))
+            put("on", kotlinx.serialization.json.JsonPrimitive(on))
+        }
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .post(payload.toString().toRequestBody(jsonMedia))
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw PlayerApiException(parseError(body, response.code))
+            PlayerJson.json.decodeFromString<ToggleFavoriteResponseDto>(body)
+        }
+    }
+
+    /** Now/next EPG for a batch of channel ids. Channels with no EPG are omitted. */
+    suspend fun epgNowNext(
+        baseUrl: String,
+        bearerToken: String,
+        playlistId: Int,
+        channelIds: List<Int>,
+    ): EpgNowNextResponseDto = withContext(Dispatchers.IO) {
+        if (channelIds.isEmpty()) return@withContext EpgNowNextResponseDto()
+        val ids = channelIds.joinToString(",")
+        val url = joinBase(
+            baseUrl,
+            "/api/player/epg/now-next?playlistId=$playlistId&channelIds=$ids",
+        )
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw PlayerApiException(parseError(body, response.code))
+            PlayerJson.json.decodeFromString<EpgNowNextResponseDto>(body)
+        }
+    }
+
+    /** Per-channel programme listing for the EPG sheet on PlayerScreen. */
+    suspend fun epgProgrammes(
+        baseUrl: String,
+        bearerToken: String,
+        playlistId: Int,
+        channelId: Int,
+    ): EpgProgrammesResponseDto = withContext(Dispatchers.IO) {
+        val url = joinBase(
+            baseUrl,
+            "/api/player/epg/programmes?playlistId=$playlistId&channelId=$channelId",
+        )
+        val req = Request.Builder()
+            .url(url)
+            .header("Authorization", "Bearer $bearerToken")
+            .get()
+            .build()
+        client.newCall(req).execute().use { response ->
+            val body = response.body?.string().orEmpty()
+            if (!response.isSuccessful) throw PlayerApiException(parseError(body, response.code))
+            PlayerJson.json.decodeFromString<EpgProgrammesResponseDto>(body)
+        }
+    }
+
     private fun parseError(body: String, code: Int): String {
         return try {
             val err = PlayerJson.json.decodeFromString<ApiErrorDto>(body)

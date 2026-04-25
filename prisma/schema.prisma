@@ -38,6 +38,9 @@ model CredentialProfile {
   dnsId     Int      @map("dns_id")
   username  String
   password  String
+  /// Optional XMLTV EPG URL. When set, the EPG ingest job pulls programme
+  /// data and matches it to channels by tvg-id (Channel.externalId).
+  epgUrl    String?  @map("epg_url")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -46,6 +49,8 @@ model CredentialProfile {
   playlists       Playlist[]
   channels        Channel[]
   refreshLog      ChannelRefreshLog?
+  epgChannels     EpgChannel[]
+  epgRefreshLog   EpgRefreshLog?
 
   @@unique([dnsId, username, password])
   @@index([dnsId])
@@ -65,12 +70,64 @@ model Channel {
   groupName  String? @map("group_name")
   category   String                       // live | movies | series | sports
 
-  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  profile   CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  favorites Favorite[]
 
   @@unique([profileId, externalId])
   @@index([profileId, category])
   @@index([profileId, category, groupName])
   @@map("channels")
+}
+
+/// XMLTV channel from the provider's EPG feed. The `epgChannelId` is the
+/// raw `<channel id="...">` value — matched against `Channel.externalId`
+/// (which carries tvg-id) to join programmes to playable channels.
+model EpgChannel {
+  id           Int    @id @default(autoincrement())
+  profileId    Int    @map("profile_id")
+  epgChannelId String @map("epg_channel_id")
+  displayName  String @default("") @map("display_name")
+
+  profile    CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  programmes EpgProgramme[]
+
+  @@unique([profileId, epgChannelId])
+  @@index([profileId])
+  @@map("epg_channels")
+}
+
+/// A single EPG programme block. Indexed by (channel, start) so the "now
+/// playing" lookup is a one-row scan: `WHERE channel = X AND start <= now
+/// ORDER BY start DESC LIMIT 1`.
+model EpgProgramme {
+  id            Int      @id @default(autoincrement())
+  epgChannelId  Int      @map("epg_channel_id")
+  startUtc      DateTime @map("start_utc")
+  stopUtc       DateTime @map("stop_utc")
+  title         String   @default("")
+  description   String?
+
+  epgChannel EpgChannel @relation(fields: [epgChannelId], references: [id], onDelete: Cascade)
+
+  @@index([epgChannelId, startUtc])
+  @@index([epgChannelId, stopUtc])
+  @@map("epg_programmes")
+}
+
+/// Tracks the most recent (or in-progress) EPG refresh per profile.
+model EpgRefreshLog {
+  id              Int       @id @default(autoincrement())
+  profileId       Int       @unique @map("profile_id")
+  status          String    // running | success | failed
+  channelCount    Int       @default(0) @map("channel_count")
+  programmeCount  Int       @default(0) @map("programme_count")
+  error           String?
+  startedAt       DateTime  @default(now()) @map("started_at")
+  finishedAt      DateTime? @map("finished_at")
+
+  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@map("epg_refresh_logs")
 }
 
 /// Tracks the most recent (or in-progress) M3U refresh for a profile.
@@ -113,8 +170,26 @@ model MacUser {
   title      String @default("")
 
   playlists Playlist[]
+  favorites Favorite[]
 
   @@map("mac_users")
+}
+
+/// User-marked favorite channels, scoped to a (device, channel). Lives at
+/// device level so a user signing into multiple devices doesn't share their
+/// list — keeps the store simple and avoids cross-device sync questions.
+model Favorite {
+  id        Int      @id @default(autoincrement())
+  macUserId Int      @map("mac_user_id")
+  channelId Int      @map("channel_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  macUser MacUser @relation(fields: [macUserId], references: [id], onDelete: Cascade)
+  channel Channel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@unique([macUserId, channelId])
+  @@index([macUserId])
+  @@map("favorites")
 }
 
 /// A playlist on a device, pointing at the credentials it should use.
@@ -260,4 +335,24 @@ model RateLimit {
   windowStart DateTime @default(now()) @map("window_start")
 
   @@map("rate_limits")
+}
+
+/// Append-only log of admin mutations. One row per (admin user, action,
+/// target) — used for compliance, debugging, and answering "who changed
+/// what when" without paging through git history or Vercel logs.
+model AuditLog {
+  id           Int      @id @default(autoincrement())
+  actorId      Int?     @map("actor_id")        // null = system / cron
+  actorName    String   @default("system") @map("actor_name")
+  action       String                                // e.g. "profile.update", "code.bulk_create"
+  targetType   String?  @map("target_type")          // e.g. "CredentialProfile"
+  targetId     String?  @map("target_id")
+  metadata     Json?
+  ip           String?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([actorId, createdAt])
+  @@map("audit_logs")
 }

@@ -27,14 +27,14 @@ object Routes {
     const val HOME = "home"
     const val PLAYLISTS = "playlists"
     const val BROWSE = "browse/{category}"
-    const val PLAYER = "player/{name}/{url}"
+    const val PLAYER = "player/{channelId}/{name}/{url}"
 
     fun browse(category: String) = "browse/$category"
 
-    fun player(name: String, url: String): String {
+    fun player(channelId: Int, name: String, url: String): String {
         val n = URLEncoder.encode(name, StandardCharsets.UTF_8.toString())
         val u = URLEncoder.encode(url, StandardCharsets.UTF_8.toString())
-        return "player/$n/$u"
+        return "player/$channelId/$n/$u"
     }
 }
 
@@ -62,6 +62,7 @@ fun AppNavHost() {
                         HomeAction.Movies -> toBrowse("movies")
                         HomeAction.Series -> toBrowse("series")
                         HomeAction.Sports -> toBrowse("sports")
+                        HomeAction.Favorites -> toBrowse("favorites")
                         HomeAction.Playlist -> navController.navigate(Routes.PLAYLISTS)
                         HomeAction.Reload -> homeVm.reload { /* stay on Home */ }
                         HomeAction.Settings -> navController.navigate(Routes.PLAYLISTS)
@@ -94,7 +95,7 @@ fun AppNavHost() {
         ) {
             BrowseScreen(
                 onPlay = { channel ->
-                    navController.navigate(Routes.player(channel.name, channel.url))
+                    navController.navigate(Routes.player(channel.id, channel.name, channel.url))
                 },
                 onHome = {
                     navController.navigate(Routes.HOME) {
@@ -105,6 +106,7 @@ fun AppNavHost() {
         }
 
         composable(Routes.PLAYER) { backStackEntry ->
+            val channelId = backStackEntry.arguments?.getString("channelId")?.toIntOrNull() ?: 0
             val name = URLDecoder.decode(
                 backStackEntry.arguments?.getString("name").orEmpty(),
                 StandardCharsets.UTF_8.toString(),
@@ -116,6 +118,7 @@ fun AppNavHost() {
             PlayerScreen(
                 title = name,
                 streamUrl = url,
+                channelId = channelId,
                 onBack = { navController.navigateUp() },
             )
         }

@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.paging.LoadState
 import androidx.paging.compose.LazyPagingItems
@@ -30,11 +31,14 @@ import androidx.paging.compose.itemKey
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.Movie
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
+import androidx.compose.material.icons.outlined.CloudOff
 import androidx.compose.material.icons.outlined.SportsSoccer
 import androidx.compose.material.icons.outlined.Tv
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,11 +53,13 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -67,6 +73,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.iboplayer.next.data.Channel
 import com.iboplayer.next.ui.channels.ChannelCategory
+import com.iboplayer.next.ui.components.tvFocusable
 import com.iboplayer.next.ui.theme.ProtonBackground
 import com.iboplayer.next.ui.theme.ProtonGold
 import com.iboplayer.next.ui.theme.ProtonOrange
@@ -83,10 +90,28 @@ fun BrowseScreen(
     val state by viewModel.state.collectAsState()
     val refreshing by viewModel.refreshing.collectAsState()
     val channels = viewModel.channelPages.collectAsLazyPagingItems()
+    val favoriteIds by viewModel.favoriteIds.collectAsState()
+    val favorites by viewModel.favorites.collectAsState()
+    val offline by viewModel.offline.collectAsState()
+    val epg by viewModel.epg.collectAsState()
     var searchOpen by remember { mutableStateOf(false) }
 
-    val isInitialLoading = channels.loadState.refresh is LoadState.Loading
-    val isEmpty = channels.itemCount == 0 && channels.loadState.refresh is LoadState.NotLoading
+    // As paged channels stream in, trigger EPG fetches for the visible ids.
+    LaunchedEffect(channels) {
+        snapshotFlow { (0 until channels.itemCount).mapNotNull { channels.peek(it)?.id } }
+            .collect { ids -> if (ids.isNotEmpty()) viewModel.ensureEpgFor(ids) }
+    }
+    LaunchedEffect(favorites) {
+        if (favorites.isNotEmpty()) viewModel.ensureEpgFor(favorites.map { it.id })
+    }
+
+    val isFavoritesTab = state.category == ChannelCategory.Favorites
+    val isInitialLoading = !isFavoritesTab && channels.loadState.refresh is LoadState.Loading
+    val isEmpty = if (isFavoritesTab) {
+        favorites.isEmpty()
+    } else {
+        channels.itemCount == 0 && channels.loadState.refresh is LoadState.NotLoading
+    }
 
     ProtonBackground {
         Column(
@@ -107,7 +132,9 @@ fun BrowseScreen(
                 onSortChange = viewModel::onSortChange,
             )
 
-            if (state.groups.isNotEmpty()) {
+            if (offline) OfflineBanner()
+
+            if (!isFavoritesTab && state.groups.isNotEmpty()) {
                 CategoryChipsRow(
                     groups = state.groups,
                     selected = state.selectedGroup,
@@ -115,25 +142,38 @@ fun BrowseScreen(
                 )
             }
 
-            SectionHeader(
-                selectedGroup = state.selectedGroup,
-                count = channels.itemCount,
-            )
+            if (!isFavoritesTab) {
+                SectionHeader(
+                    selectedGroup = state.selectedGroup,
+                    count = channels.itemCount,
+                )
+            }
 
             PullToRefreshBox(
                 isRefreshing = refreshing,
                 onRefresh = {
                     viewModel.refresh()
-                    channels.refresh()
+                    if (!isFavoritesTab) channels.refresh()
                 },
                 modifier = Modifier.fillMaxSize(),
             ) {
                 when {
                     isInitialLoading && channels.itemCount == 0 -> LoadingState()
-                    isEmpty -> EmptyState()
+                    isEmpty -> EmptyState(isFavoritesTab)
+                    isFavoritesTab -> FavoritesGrid(
+                        items = favorites,
+                        favoriteIds = favoriteIds,
+                        epg = epg,
+                        onPlay = onPlay,
+                        onToggleFavorite = viewModel::toggleFavorite,
+                        modifier = Modifier.fillMaxSize(),
+                    )
                     else -> PosterGrid(
                         items = channels,
+                        favoriteIds = favoriteIds,
+                        epg = epg,
                         onPlay = onPlay,
+                        onToggleFavorite = viewModel::toggleFavorite,
                         modifier = Modifier.fillMaxSize(),
                     )
                 }
@@ -158,18 +198,43 @@ private fun LoadingState() {
 }
 
 @Composable
-private fun EmptyState() {
+private fun OfflineBanner() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(Color(0x66F59E29))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.CloudOff,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = Modifier.size(16.dp),
+        )
+        Text(
+            text = "Offline — showing cached results",
+            color = Color.White,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
+@Composable
+private fun EmptyState(isFavoritesTab: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
-                "No items here yet.",
+                if (isFavoritesTab) "No favorites yet." else "No items here yet.",
                 color = ProtonText,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold,
             )
             Spacer(Modifier.height(4.dp))
             Text(
-                "Pull down to refresh.",
+                if (isFavoritesTab) "Tap the heart on any channel to save it." else "Pull down to refresh.",
                 color = ProtonTextMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -374,7 +439,10 @@ private fun SectionHeader(selectedGroup: String?, count: Int) {
 @Composable
 private fun PosterGrid(
     items: LazyPagingItems<Channel>,
+    favoriteIds: Set<Int>,
+    epg: Map<Int, com.iboplayer.next.data.remote.EpgNowNextEntryDto>,
     onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     LazyVerticalGrid(
@@ -389,7 +457,13 @@ private fun PosterGrid(
             key = items.itemKey { it.id },
         ) { index ->
             val channel = items[index] ?: return@items
-            PosterTile(channel = channel, onClick = { onPlay(channel) })
+            PosterTile(
+                channel = channel,
+                isFavorite = channel.id in favoriteIds,
+                nowPlaying = epg[channel.id]?.now?.title,
+                onClick = { onPlay(channel) },
+                onToggleFavorite = { onToggleFavorite(channel) },
+            )
         }
         if (items.loadState.append is LoadState.Loading) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -407,11 +481,46 @@ private fun PosterGrid(
 }
 
 @Composable
-private fun PosterTile(channel: Channel, onClick: () -> Unit) {
+private fun FavoritesGrid(
+    items: List<Channel>,
+    favoriteIds: Set<Int>,
+    epg: Map<Int, com.iboplayer.next.data.remote.EpgNowNextEntryDto>,
+    onPlay: (Channel) -> Unit,
+    onToggleFavorite: (Channel) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 130.dp),
+        contentPadding = PaddingValues(14.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        modifier = modifier,
+    ) {
+        items(items, key = { it.id }) { channel ->
+            PosterTile(
+                channel = channel,
+                isFavorite = channel.id in favoriteIds,
+                nowPlaying = epg[channel.id]?.now?.title,
+                onClick = { onPlay(channel) },
+                onToggleFavorite = { onToggleFavorite(channel) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun PosterTile(
+    channel: Channel,
+    isFavorite: Boolean,
+    nowPlaying: String?,
+    onClick: () -> Unit,
+    onToggleFavorite: () -> Unit,
+) {
     Column(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(cornerRadius = 12),
     ) {
         Box(
             modifier = Modifier
@@ -437,6 +546,30 @@ private fun PosterTile(channel: Channel, onClick: () -> Unit) {
                     modifier = Modifier.size(36.dp),
                 )
             }
+            // Heart overlay — IconButton gives us the 48dp min touch target
+            // and properly consumes the tap so the parent Column's play
+            // clickable doesn't also fire.
+            IconButton(
+                onClick = onToggleFavorite,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(2.dp),
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(RoundedCornerShape(999.dp))
+                        .background(Color(0x99000000)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove favorite" else "Add favorite",
+                        tint = if (isFavorite) ProtonOrange else Color.White,
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+            }
         }
         Spacer(Modifier.height(6.dp))
         Text(
@@ -448,6 +581,17 @@ private fun PosterTile(channel: Channel, onClick: () -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(horizontal = 2.dp),
         )
+        if (!nowPlaying.isNullOrBlank()) {
+            Text(
+                text = nowPlaying,
+                color = ProtonOrange,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp),
+            )
+        }
     }
 }
 
@@ -468,6 +612,7 @@ private fun categoryTitle(category: ChannelCategory): String = when (category) {
     ChannelCategory.Series -> "Series"
     ChannelCategory.Sports -> "Sports"
     ChannelCategory.All -> "All Channels"
+    ChannelCategory.Favorites -> "Favorites"
 }
 
 private fun categoryIcon(category: ChannelCategory): ImageVector = when (category) {
@@ -476,6 +621,7 @@ private fun categoryIcon(category: ChannelCategory): ImageVector = when (categor
     ChannelCategory.Series -> Icons.Outlined.LiveTv
     ChannelCategory.Sports -> Icons.Outlined.SportsSoccer
     ChannelCategory.All -> Icons.Outlined.Tv
+    ChannelCategory.Favorites -> Icons.Filled.Favorite
 }
 
 private fun sortLabel(sort: SortOrder): String = when (sort) {

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
 import { resolveCredentialsFromM3u } from "@/lib/credential-profiles";
 import { triggerRefreshAsync } from "@/lib/channel-refresh";
+import { audit } from "@/lib/audit";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const authError = await requireAuth();
@@ -150,6 +151,17 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     });
     // Credentials may have changed (M3U replace) — re-pull channels.
     triggerRefreshAsync(updated.id);
+    await audit({
+      action: "profile.update",
+      targetType: "CredentialProfile",
+      targetId: updated.id,
+      metadata: {
+        title: updated.title,
+        dnsId: updated.dnsId,
+        viaM3u: typeof body.m3uUrl === "string" && body.m3uUrl.length > 0,
+      },
+      req,
+    });
     return NextResponse.json(updated);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to update profile";
@@ -183,6 +195,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
       if (remaining === 0) {
         await tx.dns.delete({ where: { id: profile.dnsId } });
       }
+    });
+    await audit({
+      action: "profile.delete",
+      targetType: "CredentialProfile",
+      targetId: profileId,
     });
     return NextResponse.json({ success: true });
   } catch (e) {

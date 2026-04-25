@@ -12,8 +12,13 @@ import com.iboplayer.next.data.Channel
 import com.iboplayer.next.data.ChannelPagingSource
 import com.iboplayer.next.data.PlaylistRepository
 import com.iboplayer.next.data.SettingsStore
+import com.iboplayer.next.data.local.CacheDao
+import com.iboplayer.next.data.local.CacheEntryEntity
+import com.iboplayer.next.data.remote.ChannelGroupsResponseDto
+import com.iboplayer.next.data.remote.EpgNowNextEntryDto
+import com.iboplayer.next.data.remote.FavoritesResponseDto
 import com.iboplayer.next.data.remote.PlayerApi
-import com.iboplayer.next.data.remote.PlayerApiException
+import com.iboplayer.next.data.remote.PlayerJson
 import com.iboplayer.next.ui.channels.ChannelCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,6 +45,7 @@ class BrowseViewModel @Inject constructor(
     private val repo: PlaylistRepository,
     private val api: PlayerApi,
     private val settings: SettingsStore,
+    private val cache: CacheDao,
     savedStateHandle: SavedStateHandle,
 ) : ViewModel() {
 
@@ -59,10 +65,25 @@ class BrowseViewModel @Inject constructor(
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
+    private val _favoriteIds = MutableStateFlow<Set<Int>>(emptySet())
+    val favoriteIds: StateFlow<Set<Int>> = _favoriteIds.asStateFlow()
+
+    private val _favorites = MutableStateFlow<List<Channel>>(emptyList())
+    val favorites: StateFlow<List<Channel>> = _favorites.asStateFlow()
+
+    private val _offline = MutableStateFlow(false)
+    val offline: StateFlow<Boolean> = _offline.asStateFlow()
+
+    private val _epg = MutableStateFlow<Map<Int, EpgNowNextEntryDto>>(emptyMap())
+    val epg: StateFlow<Map<Int, EpgNowNextEntryDto>> = _epg.asStateFlow()
+    private val epgRequested = mutableSetOf<Int>()
+
     init {
-        // Load groups whenever the category changes — drives the chip strip.
+        viewModelScope.launch { loadFavorites() }
         viewModelScope.launch {
-            _category.collect { loadGroups() }
+            _category.collect { cat ->
+                if (cat == ChannelCategory.Favorites) loadFavorites() else loadGroups()
+            }
         }
     }
 
@@ -78,6 +99,7 @@ class BrowseViewModel @Inject constructor(
         _query,
     ) { cat, group, query -> Triple(cat, group, query) }
         .flatMapLatest { (cat, group, query) ->
+            if (cat == ChannelCategory.Favorites) return@flatMapLatest flowOf(PagingData.empty())
             val pl = repo.getConnected()
             val token = settings.playerToken.first().orEmpty()
             val base = settings.panelBaseUrl.first().orEmpty()
@@ -96,6 +118,7 @@ class BrowseViewModel @Inject constructor(
                     pagingSourceFactory = {
                         ChannelPagingSource(
                             api = api,
+                            cache = cache,
                             baseUrl = base,
                             bearerToken = token,
                             playlistId = pl.id,
@@ -145,8 +168,101 @@ class BrowseViewModel @Inject constructor(
         if (_refreshing.value) return
         viewModelScope.launch {
             _refreshing.update { true }
-            loadGroups()
+            if (_category.value == ChannelCategory.Favorites) loadFavorites() else loadGroups()
             _refreshing.update { false }
+        }
+    }
+
+    private suspend fun loadFavorites() {
+        val pl = repo.getConnected() ?: return
+        val token = settings.playerToken.first().orEmpty()
+        val base = settings.panelBaseUrl.first().orEmpty()
+            .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+        if (token.isBlank()) return
+
+        val key = "favorites|playlistId=${pl.id}"
+        try {
+            val resp = api.favorites(baseUrl = base, bearerToken = token, playlistId = pl.id)
+            applyFavorites(resp)
+            cache.put(
+                CacheEntryEntity(
+                    cacheKey = key,
+                    payloadJson = PlayerJson.json.encodeToString(FavoritesResponseDto.serializer(), resp),
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
+            _offline.update { false }
+            _error.update { null }
+        } catch (e: Exception) {
+            val cached = cache.get(key)?.payloadJson
+            if (cached != null) {
+                runCatching {
+                    applyFavorites(PlayerJson.json.decodeFromString(FavoritesResponseDto.serializer(), cached))
+                    _offline.update { true }
+                    _error.update { null }
+                }.onFailure {
+                    _error.update { e.message ?: "Failed to load favorites" }
+                }
+            } else {
+                _error.update { e.message ?: "Failed to load favorites" }
+            }
+        }
+    }
+
+    private fun applyFavorites(resp: FavoritesResponseDto) {
+        val items = resp.data.map {
+            Channel(
+                id = it.id,
+                externalId = it.externalId,
+                name = it.name,
+                url = it.url,
+                logo = it.logo,
+                groupName = it.groupName,
+                category = it.category,
+            )
+        }
+        _favorites.update { items }
+        _favoriteIds.update { items.map { it.id }.toSet() }
+    }
+
+    fun toggleFavorite(channel: Channel) {
+        viewModelScope.launch {
+            val token = settings.playerToken.first().orEmpty()
+            val base = settings.panelBaseUrl.first().orEmpty()
+                .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+            if (token.isBlank()) return@launch
+
+            val currentlyOn = _favoriteIds.value.contains(channel.id)
+            val nextOn = !currentlyOn
+            // Optimistic update — flip locally, roll back on failure.
+            _favoriteIds.update { if (nextOn) it + channel.id else it - channel.id }
+            if (nextOn) {
+                _favorites.update { list ->
+                    if (list.any { it.id == channel.id }) list else list + channel
+                }
+            } else {
+                _favorites.update { list -> list.filterNot { it.id == channel.id } }
+            }
+
+            try {
+                api.toggleFavorite(
+                    baseUrl = base,
+                    bearerToken = token,
+                    channelId = channel.id,
+                    on = nextOn,
+                )
+            } catch (e: Exception) {
+                // Roll back on failure.
+                _favoriteIds.update { if (currentlyOn) it + channel.id else it - channel.id }
+                if (currentlyOn) {
+                    _favorites.update { list ->
+                        if (list.any { it.id == channel.id }) list else list + channel
+                    }
+                } else {
+                    _favorites.update { list -> list.filterNot { it.id == channel.id } }
+                }
+                _error.update { e.message ?: "Failed to update favorite" }
+            }
         }
     }
 
@@ -157,6 +273,7 @@ class BrowseViewModel @Inject constructor(
             .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
         if (token.isBlank()) return
 
+        val key = "groups|playlistId=${pl.id}|category=${categoryKey(_category.value).orEmpty()}"
         try {
             val resp = api.channelGroups(
                 baseUrl = base,
@@ -164,21 +281,77 @@ class BrowseViewModel @Inject constructor(
                 playlistId = pl.id,
                 category = categoryKey(_category.value),
             )
-            _groups.update {
-                resp.data.map { GroupRow(it.groupName, it.count) }
-            }
+            applyGroups(resp)
+            cache.put(
+                CacheEntryEntity(
+                    cacheKey = key,
+                    payloadJson = PlayerJson.json.encodeToString(ChannelGroupsResponseDto.serializer(), resp),
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
+            _offline.update { false }
             _error.update { null }
-        } catch (e: PlayerApiException) {
-            _error.update { e.message ?: "Failed to load groups" }
         } catch (e: Exception) {
-            _error.update { e.message ?: "Failed to load groups" }
+            val cached = cache.get(key)?.payloadJson
+            if (cached != null) {
+                runCatching {
+                    applyGroups(PlayerJson.json.decodeFromString(ChannelGroupsResponseDto.serializer(), cached))
+                    _offline.update { true }
+                    _error.update { null }
+                }.onFailure {
+                    _error.update { e.message ?: "Failed to load groups" }
+                }
+            } else {
+                _error.update { e.message ?: "Failed to load groups" }
+            }
         }
+    }
+
+    private fun applyGroups(resp: ChannelGroupsResponseDto) {
+        _groups.update { resp.data.map { GroupRow(it.groupName, it.count) } }
     }
 
     fun onCategoryChange(category: ChannelCategory) {
         _category.update { category }
         _selectedGroup.update { null }
         _query.update { "" }
+        // EPG entries are tied to the current visible set — clear so that a
+        // category switch refetches now/next for the new tiles.
+        epgRequested.clear()
+        _epg.update { emptyMap() }
+    }
+
+    /**
+     * Fetch now/next EPG for the given channel ids, skipping any we've already
+     * requested. Called as the LazyPagingItems streams new tiles into view.
+     */
+    fun ensureEpgFor(channelIds: List<Int>) {
+        if (channelIds.isEmpty()) return
+        val pending = channelIds.filter { epgRequested.add(it) }
+        if (pending.isEmpty()) return
+        viewModelScope.launch {
+            val pl = repo.getConnected() ?: return@launch
+            val token = settings.playerToken.first().orEmpty()
+            val base = settings.panelBaseUrl.first().orEmpty()
+                .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
+            if (token.isBlank()) return@launch
+            // Batch in chunks of 100 to stay well under the server's 200 cap.
+            pending.chunked(100).forEach { batch ->
+                runCatching {
+                    api.epgNowNext(base, token, pl.id, batch)
+                }.onSuccess { resp ->
+                    if (resp.data.isNotEmpty()) {
+                        _epg.update { current ->
+                            current + resp.data.associateBy { it.channelId }
+                        }
+                    }
+                }.onFailure {
+                    // Re-allow retry on next attempt — drop these from the
+                    // dedup set so a later refresh can pick them up.
+                    epgRequested.removeAll(batch.toSet())
+                }
+            }
+        }
     }
 
     fun onGroupSelected(title: String) = _selectedGroup.update { title }
@@ -193,5 +366,6 @@ class BrowseViewModel @Inject constructor(
         ChannelCategory.Series -> "series"
         ChannelCategory.Sports -> "sports"
         ChannelCategory.All -> null
+        ChannelCategory.Favorites -> null
     }
 }

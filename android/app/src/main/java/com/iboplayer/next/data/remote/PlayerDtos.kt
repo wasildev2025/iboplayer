@@ -87,3 +87,58 @@ data class ChannelGroupDto(
 data class ChannelGroupsResponseDto(
     val data: List<ChannelGroupDto> = emptyList(),
 )
+
+@Serializable
+data class FavoriteDto(
+    val id: Int,
+    val externalId: String,
+    val name: String,
+    val url: String,
+    val logo: String? = null,
+    val groupName: String? = null,
+    val category: String,
+    val favoritedAt: String,
+)
+
+@Serializable
+data class FavoritesResponseDto(
+    val data: List<FavoriteDto> = emptyList(),
+)
+
+@Serializable
+data class ToggleFavoriteResponseDto(
+    val success: Boolean = false,
+    val favorited: Boolean = false,
+)
+
+@Serializable
+data class EpgSlotDto(
+    val title: String = "",
+    val startUtc: String = "",
+    val stopUtc: String = "",
+)
+
+@Serializable
+data class EpgNowNextEntryDto(
+    val channelId: Int,
+    val now: EpgSlotDto? = null,
+    val next: EpgSlotDto? = null,
+)
+
+@Serializable
+data class EpgNowNextResponseDto(
+    val data: List<EpgNowNextEntryDto> = emptyList(),
+)
+
+@Serializable
+data class EpgProgrammeDto(
+    val title: String = "",
+    val description: String? = null,
+    val startUtc: String = "",
+    val stopUtc: String = "",
+)
+
+@Serializable
+data class EpgProgrammesResponseDto(
+    val data: List<EpgProgrammeDto> = emptyList(),
+)

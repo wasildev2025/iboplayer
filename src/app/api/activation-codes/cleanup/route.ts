@@ -1,16 +1,16 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { requireAuth } from "@/lib/api-auth";
+import { requireAdminOrCron } from "@/lib/cron-auth";
 
 /**
  * Prune `Used` activation codes older than `olderThanDays` (default 90).
- * Run periodically — either manually from the dashboard or via a Vercel
- * Cron Job pointed at this endpoint with the admin session.
+ * Triggered by Vercel Cron weekly OR manually by an admin from the
+ * dashboard.
  *
  * Body: { olderThanDays?: number }
  */
 export async function POST(req: Request) {
-  const authError = await requireAuth();
+  const authError = await requireAdminOrCron(req);
   if (authError) return authError;
 
   const body = (await req.json().catch(() => ({}))) as { olderThanDays?: unknown };
@@ -32,4 +32,15 @@ export async function POST(req: Request) {
     deleted: result.count,
     cutoff: cutoff.toISOString(),
   });
+}
+
+// Vercel Cron sends GET. Re-use the POST handler with a default body.
+export async function GET(req: Request) {
+  return POST(
+    new Request(req.url, {
+      method: "POST",
+      headers: req.headers,
+      body: JSON.stringify({}),
+    }),
+  );
 }

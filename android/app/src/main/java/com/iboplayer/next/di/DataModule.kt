@@ -3,6 +3,7 @@ package com.iboplayer.next.di
 import android.content.Context
 import androidx.room.Room
 import com.iboplayer.next.data.local.AppDatabase
+import com.iboplayer.next.data.local.CacheDao
 import com.iboplayer.next.data.local.PlaylistDao
 import dagger.Module
 import dagger.Provides
@@ -44,5 +45,10 @@ object DataModule {
     @Provides
     fun providePlaylistDao(database: AppDatabase): PlaylistDao {
         return database.playlistDao()
+    }
+
+    @Provides
+    fun provideCacheDao(database: AppDatabase): CacheDao {
+        return database.cacheDao()
     }
 }

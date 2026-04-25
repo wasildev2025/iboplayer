@@ -82,6 +82,12 @@ export default function ActivationCodesPage() {
   return (
     <>
       <PageHeader title="Activation Codes" description="Manage activation codes">
+        <Button
+          variant="outline"
+          onClick={() => router.push("/activation-codes/bulk-import")}
+        >
+          Bulk Import
+        </Button>
         <Button onClick={() => router.push("/activation-codes/create")}>
           <Plus className="h-4 w-4 mr-2" />
           New Code

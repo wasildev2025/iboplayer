@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ExitToApp
+import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.LiveTv
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Movie
@@ -55,13 +56,14 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.iboplayer.next.BuildConfig
 import com.iboplayer.next.R
+import com.iboplayer.next.ui.components.tvFocusable
 import com.iboplayer.next.ui.theme.ProtonBackground
 import com.iboplayer.next.ui.theme.ProtonGold
 import com.iboplayer.next.ui.theme.ProtonOrange
 import com.iboplayer.next.ui.theme.ProtonText
 import com.iboplayer.next.ui.theme.ProtonTextMuted
 
-enum class HomeAction { Live, Movies, Series, Sports, Playlist, Settings, Reload, Exit }
+enum class HomeAction { Live, Movies, Series, Sports, Favorites, Playlist, Settings, Reload, Exit }
 
 @Composable
 fun HomeScreen(
@@ -224,6 +226,12 @@ private fun TileGrid(onAction: (HomeAction) -> Unit) {
                 onClick = { onAction(HomeAction.Sports) },
             )
         }
+        HomeTile(
+            title = "Favorites",
+            icon = Icons.Outlined.FavoriteBorder,
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { onAction(HomeAction.Favorites) },
+        )
         // Playlist gets a full-width highlight — it's the primary gate to
         // getting started, and the screenshot gives it extra emphasis.
         HomeTileWide(
@@ -248,7 +256,8 @@ private fun HomeTile(
             .clip(RoundedCornerShape(18.dp))
             .background(Color(0x66111C2E))
             .border(1.dp, ProtonGold.copy(alpha = 0.5f), RoundedCornerShape(18.dp))
-            .clickable(onClick = onClick),
+            .clickable(onClick = onClick)
+            .tvFocusable(cornerRadius = 18),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -288,6 +297,7 @@ private fun HomeTileWide(
             )
             .border(1.dp, ProtonGold.copy(alpha = 0.6f), RoundedCornerShape(18.dp))
             .clickable(onClick = onClick)
+            .tvFocusable(cornerRadius = 18)
             .padding(horizontal = 20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),

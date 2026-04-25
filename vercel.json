@@ -1,0 +1,17 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "crons": [
+    {
+      "path": "/api/activation-codes/cleanup",
+      "schedule": "0 3 * * 0"
+    },
+    {
+      "path": "/api/rate-limits/cleanup",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/internal/epg-refresh",
+      "schedule": "0 5 * * *"
+    }
+  ]
+}

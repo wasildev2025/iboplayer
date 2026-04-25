@@ -1,7 +1,7 @@
 package com.iboplayer.next.ui.channels
 
 enum class ChannelCategory {
-    All, Live, Movies, Series, Sports;
+    All, Live, Movies, Series, Sports, Favorites;
 
     companion object {
         fun fromKey(key: String?): ChannelCategory = when (key?.lowercase()) {
@@ -9,6 +9,7 @@ enum class ChannelCategory {
             "movies" -> Movies
             "series" -> Series
             "sports" -> Sports
+            "favorites" -> Favorites
             else -> All
         }
     }
