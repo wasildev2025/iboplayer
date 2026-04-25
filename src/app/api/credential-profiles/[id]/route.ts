@@ -80,10 +80,31 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       password = rawPass;
     }
 
-    const updated = await prisma.credentialProfile.update({
-      where: { id: profileId },
-      data: { dnsId, username, password, title },
-      include: { dns: true },
+    // Save the profile, then optionally sync the DNS title for "single source
+    // of truth" UX. Sync only when this is the *only* profile attached to the
+    // DNS — otherwise renaming one profile would clobber a sibling profile's
+    // preferred host name.
+    const updated = await prisma.$transaction(async (tx) => {
+      const p = await tx.credentialProfile.update({
+        where: { id: profileId },
+        data: { dnsId, username, password, title },
+        include: { dns: true },
+      });
+
+      if (title) {
+        const siblingCount = await tx.credentialProfile.count({
+          where: { dnsId: p.dnsId, NOT: { id: profileId } },
+        });
+        if (siblingCount === 0) {
+          const refreshedDns = await tx.dns.update({
+            where: { id: p.dnsId },
+            data: { title },
+          });
+          p.dns = refreshedDns;
+        }
+      }
+
+      return p;
     });
     return NextResponse.json(updated);
   } catch (e) {

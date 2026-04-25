@@ -9,6 +9,7 @@ import com.iboplayer.next.data.PlaylistRepository
 import com.iboplayer.next.data.SettingsStore
 import com.iboplayer.next.data.remote.PlayerApi
 import com.iboplayer.next.util.DeviceMac
+import com.iboplayer.next.util.DeviceName
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,7 +74,7 @@ class HomeViewModel @Inject constructor(
 
         runCatching {
             if (existingToken.isBlank()) {
-                val login = api.login(base, deviceMac.current(), null)
+                val login = api.login(base, deviceMac.current(), null, deviceName = DeviceName.display)
                 val token = login.token ?: return@runCatching
                 settings.savePanelSession(
                     baseUrl = base,
@@ -102,7 +103,7 @@ class HomeViewModel @Inject constructor(
             val token = settings.playerToken.first().orEmpty()
             val result = runCatching {
                 if (token.isBlank()) {
-                    val login = api.login(base, deviceMac.current(), null)
+                    val login = api.login(base, deviceMac.current(), null, deviceName = DeviceName.display)
                     val newToken = login.token ?: error("No token")
                     settings.savePanelSession(
                         baseUrl = base,

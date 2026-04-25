@@ -88,7 +88,9 @@ export default function CreateCredentialProfilePage() {
                 placeholder="e.g. Provider X — Premium"
               />
               <p className="text-xs text-muted-foreground">
-                Used for the admin label only. Defaults to the DNS title if left blank.
+                Shown in the profiles list and on the DNS Settings page (when
+                this is the only profile on this host). Defaults to the DNS
+                title if left blank.
               </p>
             </div>
 

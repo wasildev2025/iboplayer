@@ -9,6 +9,7 @@ import com.iboplayer.next.data.local.PlaylistEntity
 import com.iboplayer.next.data.remote.PlayerApi
 import com.iboplayer.next.data.remote.PlayerApiException
 import com.iboplayer.next.util.DeviceMac
+import com.iboplayer.next.util.DeviceName
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -104,7 +105,7 @@ class PlaylistViewModel @Inject constructor(
                 val base = settings.panelBaseUrl.first().orEmpty()
                     .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
                 val mac = deviceMac.current()
-                val resp = api.activatePlaylist(base, mac, code)
+                val resp = api.activatePlaylist(base, mac, code, deviceName = DeviceName.display)
                 // First activation on this device creates a MacUser on the panel
                 // and returns a fresh session — persist it so later API calls work.
                 val token = resp.token

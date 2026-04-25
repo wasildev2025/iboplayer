@@ -51,7 +51,11 @@ export async function profileFromM3uUrl(
   if (!parsed.url || !parsed.username || !parsed.password) {
     throw new Error("M3U link missing host, username, or password");
   }
-  const dns = await upsertDnsByUrl(parsed.url);
+  // Pass the admin's title down — `upsertDnsByUrl` only uses it when CREATING
+  // a new DNS row (existing rows keep their title). So the very first profile
+  // bound to a brand-new host gets a meaningful DNS Settings entry instead of
+  // a bare hostname.
+  const dns = await upsertDnsByUrl(parsed.url, opts.title?.trim() || undefined);
   return upsertCredentialProfile({
     dnsId: dns.id,
     username: parsed.username,

@@ -22,7 +22,11 @@ import {
  *   - Returns a fresh player JWT so the device can call /playlists next.
  */
 export async function POST(req: Request) {
-  let body: { macAddress?: unknown; activationCode?: unknown };
+  let body: {
+    macAddress?: unknown;
+    activationCode?: unknown;
+    deviceName?: unknown;
+  };
   try {
     body = await req.json();
   } catch {
@@ -31,6 +35,8 @@ export async function POST(req: Request) {
 
   const macRaw = typeof body.macAddress === "string" ? body.macAddress.trim() : "";
   const code = typeof body.activationCode === "string" ? body.activationCode.trim() : "";
+  const deviceName =
+    typeof body.deviceName === "string" ? body.deviceName.trim() : "";
   if (!macRaw) {
     return NextResponse.json({ error: "macAddress is required" }, { status: 400 });
   }
@@ -51,12 +57,13 @@ export async function POST(req: Request) {
 
   const normMac = normalizeMac(macRaw);
 
+  // Title is set on first registration only — admin edits afterwards stick.
   const macUser = await prisma.macUser.upsert({
     where: { macAddress: normMac },
     update: {},
     create: {
       macAddress: normMac,
-      title: `Device ${normMac}`,
+      title: deviceName || `Device ${normMac}`,
     },
   });
 

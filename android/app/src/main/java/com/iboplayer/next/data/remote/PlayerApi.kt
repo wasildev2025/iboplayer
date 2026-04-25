@@ -40,12 +40,16 @@ class PlayerApi @Inject constructor(
         baseUrl: String,
         macAddress: String,
         activationCode: String?,
+        deviceName: String? = null,
     ): LoginResponseDto = withContext(Dispatchers.IO) {
         val url = joinBase(baseUrl, "/api/player/login")
         val payload = buildJsonObject {
             put("macAddress", JsonPrimitive(macAddress))
             if (!activationCode.isNullOrBlank()) {
                 put("activationCode", JsonPrimitive(activationCode.trim()))
+            }
+            if (!deviceName.isNullOrBlank()) {
+                put("deviceName", JsonPrimitive(deviceName))
             }
         }
         val req = Request.Builder()
@@ -82,11 +86,15 @@ class PlayerApi @Inject constructor(
         baseUrl: String,
         macAddress: String,
         activationCode: String,
+        deviceName: String? = null,
     ): ActivateResponseDto = withContext(Dispatchers.IO) {
         val url = joinBase(baseUrl, "/api/player/playlists/activate")
         val payload = buildJsonObject {
             put("macAddress", JsonPrimitive(macAddress))
             put("activationCode", JsonPrimitive(activationCode.trim()))
+            if (!deviceName.isNullOrBlank()) {
+                put("deviceName", JsonPrimitive(deviceName))
+            }
         }
         val req = Request.Builder()
             .url(url)
