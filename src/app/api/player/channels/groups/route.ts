@@ -33,6 +33,10 @@ export async function GET(req: Request) {
 
   const category = searchParams.get("category") || undefined;
 
+  // Cap at 500 groups — IPTV providers rarely exceed this and bounded
+  // results keep payloads small for the chip strip on Android. If a real
+  // provider has more, we sort largest-first so the user gets the
+  // populated buckets first.
   const rows = await prisma.channel.groupBy({
     by: ["groupName"],
     where: {
@@ -41,7 +45,8 @@ export async function GET(req: Request) {
       groupName: { not: null },
     },
     _count: { _all: true },
-    orderBy: { groupName: "asc" },
+    orderBy: { _count: { groupName: "desc" } },
+    take: 500,
   });
 
   return NextResponse.json({

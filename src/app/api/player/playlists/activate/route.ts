@@ -7,6 +7,7 @@ import {
   playlistsForMacUser,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
+import { rateLimit, callerIp } from "@/lib/rate-limit";
 
 /**
  * Redeem an activation code for a device. No bearer auth required — this is
@@ -22,6 +23,20 @@ import {
  *   - Returns a fresh player JWT so the device can call /playlists next.
  */
 export async function POST(req: Request) {
+  // Rate-limit by caller IP. Activation codes are guessable in principle
+  // (12-digit numeric, 10^12 space), so cap brute-force attempts.
+  const ip = callerIp(req);
+  const rl = await rateLimit(`activate:${ip}`, 10, 60_000);
+  if (!rl.allowed) {
+    return NextResponse.json(
+      { error: "Too many activation attempts. Try again shortly." },
+      {
+        status: 429,
+        headers: { "retry-after": String(Math.ceil(rl.retryAfterMs / 1000)) },
+      },
+    );
+  }
+
   let body: {
     macAddress?: unknown;
     activationCode?: unknown;

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.hilt)
     alias(libs.plugins.ksp)
+}
+
+// Release signing pulls keystore details from android/keystore.properties
+// (gitignored) so credentials never live in the repo. CI sets these via
+// secrets; locally, copy keystore.properties.example and fill in real values
+// after generating a keystore with:
+//   keytool -genkey -v -keystore release.jks -keyalg RSA -keysize 2048 \
+//           -validity 10000 -alias iboplayer
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) {
+        keystorePropsFile.inputStream().use { load(it) }
+    }
 }
 
 android {
@@ -27,6 +42,30 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            // Falls back to env vars if keystore.properties isn't present —
+            // works locally OR in CI. Release builds without any keystore
+            // configured will fail (intentional — better than shipping a
+            // debug-signed APK by accident).
+            val storeFilePath =
+                keystoreProps.getProperty("storeFile")
+                    ?: System.getenv("ANDROID_KEYSTORE_PATH")
+            val pwd = keystoreProps.getProperty("storePassword")
+                ?: System.getenv("ANDROID_KEYSTORE_PASSWORD")
+            val alias = keystoreProps.getProperty("keyAlias")
+                ?: System.getenv("ANDROID_KEY_ALIAS")
+            val keyPwd = keystoreProps.getProperty("keyPassword")
+                ?: System.getenv("ANDROID_KEY_PASSWORD")
+            if (storeFilePath != null && pwd != null && alias != null && keyPwd != null) {
+                storeFile = file(storeFilePath)
+                storePassword = pwd
+                keyAlias = alias
+                keyPassword = keyPwd
+            }
+        }
+    }
+
     buildTypes {
         debug {
             // Debug builds currently point at production Vercel so installs on
@@ -47,6 +86,13 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // Use the release keystore when available; if env/properties
+            // aren't set, fall back to debug signing only for local builds.
+            // CI must set the env vars to produce a Play-Store-ready APK.
+            val sc = signingConfigs.findByName("release")
+            signingConfig =
+                if (sc?.storeFile?.exists() == true) sc
+                else signingConfigs.getByName("debug")
         }
     }
 

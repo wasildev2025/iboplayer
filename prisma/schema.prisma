@@ -250,3 +250,14 @@ model RemoteUpdate {
 
   @@map("remote_update")
 }
+
+/// Token-bucket rate limit storage. Composite key is "<ip>:<endpoint>" so
+/// each (caller, endpoint) gets its own counter. Rows are upserted on every
+/// hit and trimmed by a simple housekeeping query when convenient.
+model RateLimit {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime @default(now()) @map("window_start")
+
+  @@map("rate_limits")
+}

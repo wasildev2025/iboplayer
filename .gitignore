@@ -48,3 +48,6 @@ next-env.d.ts
 /android/.kotlin
 /android/.next
 .env*.local
+
+# Sentry Config File
+.env.sentry-build-plugin

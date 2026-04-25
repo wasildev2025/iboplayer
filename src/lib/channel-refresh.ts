@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import { buildM3uPlaylistUrl } from "@/lib/mac";
 import { parseM3u } from "@/lib/m3u-server";
+import { captureError } from "@/lib/observability";
 
 /**
  * Re-fetch and re-store all channels for a credential profile. This is the
@@ -72,9 +73,17 @@ export async function refreshChannelsForProfile(profileId: number): Promise<{
       return true;
     });
 
-    // Replace atomically per-profile: delete all, then bulk insert in chunks.
-    await prisma.channel.deleteMany({ where: { profileId } });
-
+    // Strategy: insert-first, then delete orphans. The profile's channel
+    // table is never momentarily empty — old channels remain visible while
+    // new ones stream in, then any channels whose externalId is absent
+    // from the new feed get pruned at the end.
+    //
+    // For the prune step we need "DELETE WHERE external_id NOT IN (newIds)"
+    // but Prisma's `notIn` with 100k+ elements would exceed Postgres's
+    // 32k bind-parameter limit. Instead we fetch the existing externalIds
+    // (just text strings), compute the diff in JS, and delete by primary
+    // key in chunks. ~50 MB of strings fetched for a 272k-channel profile
+    // — acceptable for a refresh that runs minutes-to-hours apart.
     const CHUNK = 1000;
     for (let i = 0; i < dedup.length; i += CHUNK) {
       const slice = dedup.slice(i, i + CHUNK).map((c) => ({
@@ -86,7 +95,25 @@ export async function refreshChannelsForProfile(profileId: number): Promise<{
         groupName: c.groupName,
         category: c.category,
       }));
+      // skipDuplicates: rows that already exist (same profile, same
+      // externalId) are left untouched. Their metadata may go stale between
+      // refreshes — acceptable trade for atomicity.
       await prisma.channel.createMany({ data: slice, skipDuplicates: true });
+    }
+
+    // Prune orphans
+    const existingIds = await prisma.channel.findMany({
+      where: { profileId },
+      select: { id: true, externalId: true },
+    });
+    const orphanIds = existingIds
+      .filter((c) => !seen.has(c.externalId))
+      .map((c) => c.id);
+    const DELETE_CHUNK = 5_000;
+    for (let i = 0; i < orphanIds.length; i += DELETE_CHUNK) {
+      await prisma.channel.deleteMany({
+        where: { id: { in: orphanIds.slice(i, i + DELETE_CHUNK) } },
+      });
     }
 
     await prisma.channelRefreshLog.update({
@@ -110,6 +137,7 @@ export async function refreshChannelsForProfile(profileId: number): Promise<{
         finishedAt: new Date(),
       },
     });
+    captureError(e, { profileId, op: "refreshChannels" });
     return { channelCount: 0, status: "failed", error: message };
   }
 }

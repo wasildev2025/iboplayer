@@ -11,10 +11,27 @@ async function main() {
     return;
   }
 
+  // Read seed credentials from env so production passwords never live in
+  // committed source. The seed script refuses to run without an explicit
+  // password — accidentally creating an admin with a known default would be
+  // worse than the script failing.
+  const seedUsername = process.env.SEED_ADMIN_USERNAME?.trim() || "Admin";
+  const seedPassword = process.env.SEED_ADMIN_PASSWORD?.trim();
+  if (!seedPassword) {
+    throw new Error(
+      "SEED_ADMIN_PASSWORD is required. Run with " +
+        "`SEED_ADMIN_PASSWORD='<strong-password>' npx tsx prisma/seed.ts` " +
+        "(use a fresh password each run; never commit the value).",
+    );
+  }
+  if (seedPassword.length < 12) {
+    throw new Error("SEED_ADMIN_PASSWORD must be at least 12 characters.");
+  }
+
   await prisma.user.create({
     data: {
-      username: "Admin",
-      password: hashSync("Ajmal$1234", 10),
+      username: seedUsername,
+      password: hashSync(seedPassword, 10),
     },
   });
 
