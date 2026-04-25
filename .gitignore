@@ -36,6 +36,10 @@ yarn-error.log*
 # vercel
 .vercel
 
+# local sqlite (dev only)
+prisma/dev.db
+prisma/dev.db-journal
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -43,3 +47,4 @@ next-env.d.ts
 /src/generated/prisma
 /android/.kotlin
 /android/.next
+.env*.local

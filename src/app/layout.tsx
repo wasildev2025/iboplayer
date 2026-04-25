@@ -6,8 +6,8 @@ import { Providers } from "@/components/providers";
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
-  title: "S Player Panel Manager",
-  description: "IBO PRO Ultra - Admin Panel",
+  title: "IPTV Player Panel Manager",
+  description: "IPTV Player - Admin Panel",
 };
 
 export default function RootLayout({
