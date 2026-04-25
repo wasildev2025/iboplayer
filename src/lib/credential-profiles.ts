@@ -39,6 +39,29 @@ export async function upsertCredentialProfile(input: {
 }
 
 /**
+ * Parse an M3U URL and resolve (or create) the underlying DNS row, without
+ * touching CredentialProfile at all. Used by the "rotate credentials" flow
+ * where we want to update an existing profile in place — calling
+ * `profileFromM3uUrl` there would create a new profile row and collide with
+ * the existing one's `(dnsId, username, password)` unique constraint.
+ */
+export async function resolveCredentialsFromM3u(
+  m3uUrl: string,
+  opts: { title?: string | null } = {},
+): Promise<{ dnsId: number; username: string; password: string }> {
+  const parsed = parseM3uUrl(m3uUrl);
+  if (!parsed.url || !parsed.username || !parsed.password) {
+    throw new Error("M3U link missing host, username, or password");
+  }
+  const dns = await upsertDnsByUrl(parsed.url, opts.title?.trim() || undefined);
+  return {
+    dnsId: dns.id,
+    username: parsed.username,
+    password: parsed.password,
+  };
+}
+
+/**
  * Resolve an M3U get.php URL into a CredentialProfile, creating the underlying
  * DNS row if needed. The single entry point used by activation-code creation,
  * profile creation, and the M3U extractor UI.

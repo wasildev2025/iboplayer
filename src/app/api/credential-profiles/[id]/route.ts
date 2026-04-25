@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
-import { profileFromM3uUrl } from "@/lib/credential-profiles";
+import { resolveCredentialsFromM3u } from "@/lib/credential-profiles";
 import { triggerRefreshAsync } from "@/lib/channel-refresh";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -56,15 +56,15 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     let password: string;
 
     if (typeof body.m3uUrl === "string" && body.m3uUrl.trim()) {
-      // Resolve the new M3U into a DNS row + extract creds, then update this
-      // profile to point at them (rather than upserting a new profile row).
-      const tmp = await profileFromM3uUrl(body.m3uUrl.trim());
-      // profileFromM3uUrl may have returned an existing profile if the new
-      // (dns,user,pass) already exists as a different row. Either way we
-      // copy the resolved values onto *this* profile.
-      dnsId = tmp.dnsId;
-      username = tmp.username;
-      password = tmp.password;
+      // Resolve the new M3U into a DNS row + extract creds. Crucially we do
+      // NOT call `profileFromM3uUrl` here — that would upsert a separate
+      // profile row with the new (dns,user,pass) triple, which then collides
+      // with the unique constraint when we try to apply the same triple to
+      // *this* profile below.
+      const resolved = await resolveCredentialsFromM3u(body.m3uUrl.trim());
+      dnsId = resolved.dnsId;
+      username = resolved.username;
+      password = resolved.password;
     } else {
       const rawDns =
         typeof body.dnsId === "number" ? body.dnsId : null;
@@ -79,6 +79,30 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       dnsId = rawDns;
       username = rawUser;
       password = rawPass;
+    }
+
+    // Pre-check: another profile already has this exact (dns, user, pass)
+    // triple. The unique constraint would surface this as a P2002 error
+    // mid-transaction, but a clean 409 with explanation is friendlier.
+    const collision = await prisma.credentialProfile.findFirst({
+      where: {
+        dnsId,
+        username,
+        password,
+        NOT: { id: profileId },
+      },
+      select: { id: true, title: true },
+    });
+    if (collision) {
+      return NextResponse.json(
+        {
+          error:
+            `Another profile (#${collision.id}${collision.title ? ` — ${collision.title}` : ""}) ` +
+            `already uses these exact credentials. Delete or merge that profile first, ` +
+            `or relink your activation codes to it directly.`,
+        },
+        { status: 409 },
+      );
     }
 
     // Save the profile, then optionally sync the DNS title for "single source

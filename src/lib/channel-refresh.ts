@@ -115,16 +115,30 @@ export async function refreshChannelsForProfile(profileId: number): Promise<{
 }
 
 /**
- * Fire-and-forget refresh — used when admin creates/updates a profile and
- * we don't want to block the request on the M3U fetch. Errors are captured
- * in the ChannelRefreshLog.
+ * Schedule a channel refresh to run after the current request returns.
+ *
+ * Uses Next.js `after()` so Vercel keeps the function instance alive long
+ * enough to finish the M3U fetch + ingest — a bare `void promise` would be
+ * killed the moment the response is sent.
+ *
+ * Caveat: for very large M3Us (100k+ channels), the work can still exceed
+ * the Vercel function timeout (10s on Hobby, up to 800s on Pro). On
+ * timeout the ChannelRefreshLog stays in `running` and the admin can
+ * retry from the dashboard "Refresh now" button.
  */
 export function triggerRefreshAsync(profileId: number): void {
-  // No await — Vercel will keep the function alive while the promise resolves
-  // up to the function timeout, which is enough for normal-size M3Us.
-  refreshChannelsForProfile(profileId).catch((e) => {
-    // Already recorded in the log table; this catch just prevents an unhandled
-    // promise rejection from killing the runtime.
-    console.error(`[channel-refresh] background refresh failed for profile ${profileId}:`, e);
+  // Lazy import keeps `next/server` out of non-Next environments (e.g. the
+  // Prisma seed script which also imports from this module path indirectly).
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const { after } = require("next/server") as typeof import("next/server");
+  after(async () => {
+    try {
+      await refreshChannelsForProfile(profileId);
+    } catch (e) {
+      console.error(
+        `[channel-refresh] background refresh failed for profile ${profileId}:`,
+        e,
+      );
+    }
   });
 }

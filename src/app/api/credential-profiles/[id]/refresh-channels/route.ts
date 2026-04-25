@@ -3,6 +3,11 @@ import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
 import { refreshChannelsForProfile } from "@/lib/channel-refresh";
 
+// Max execution window for the M3U ingest. Vercel Hobby caps at 10s — Pro
+// honors up to 800s. Big M3Us (100k+ channels) need Pro to complete in one
+// invocation; otherwise admin can retry until the inserts catch up.
+export const maxDuration = 60;
+
 /**
  * Manually trigger an M3U re-pull for a profile. Synchronous — caller
  * waits for completion. Returns the refreshed channel count.
