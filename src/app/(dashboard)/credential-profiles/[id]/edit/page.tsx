@@ -18,6 +18,9 @@ import {
   RefreshCw,
   CheckCircle2,
   XCircle,
+  Tags,
+  Eye,
+  Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { parseM3uUrl } from "@/lib/m3u-parser";
@@ -66,6 +69,77 @@ export default function EditCredentialProfilePage() {
   };
   const [refreshStatus, setRefreshStatus] = useState<RefreshStatus | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
+
+  // Categorization diagnostic + recategorize-in-place state
+  type CategoryDebug = {
+    profileId: number;
+    total: number;
+    counts: Record<string, number>;
+    topGroups: Record<string, { groupName: string | null; count: number }[]>;
+    samples: Record<
+      string,
+      {
+        id: number;
+        name: string;
+        url: string;
+        groupName: string | null;
+        category: string;
+      }[]
+    >;
+  };
+  const [categoryDebug, setCategoryDebug] = useState<CategoryDebug | null>(null);
+  const [isInspecting, setIsInspecting] = useState(false);
+  const [isRecategorizing, setIsRecategorizing] = useState(false);
+  const [showSamples, setShowSamples] = useState(false);
+
+  const loadCategoryDebug = async () => {
+    setIsInspecting(true);
+    try {
+      const res = await fetch(`/api/credential-profiles/${id}/category-debug`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to load diagnostic");
+      }
+      setCategoryDebug(await res.json());
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to load diagnostic";
+      toast.error(msg);
+    } finally {
+      setIsInspecting(false);
+    }
+  };
+
+  const handleRecategorize = async () => {
+    setIsRecategorizing(true);
+    try {
+      const res = await fetch(
+        `/api/credential-profiles/${id}/recategorize`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Recategorize failed");
+      }
+      const result = await res.json();
+      const movedSummary = Object.entries(
+        result.moved as Record<string, number>,
+      )
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(", ");
+      toast.success(
+        `Recategorized — ${result.changed}/${result.inspected} rows changed${
+          movedSummary ? ` (${movedSummary})` : ""
+        }`,
+      );
+      // Refresh the diagnostic so the UI immediately reflects the new state.
+      await loadCategoryDebug();
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Recategorize failed";
+      toast.error(msg);
+    } finally {
+      setIsRecategorizing(false);
+    }
+  };
 
   const loadRefreshStatus = async () => {
     try {
@@ -298,6 +372,148 @@ export default function EditCredentialProfilePage() {
                   <RefreshCw className="h-4 w-4 mr-2" />
                 )}
                 Refresh now
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Channel categorization diagnostic + recategorize */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tags className="h-5 w-5" />
+              Channel Categorization
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Each channel is bucketed into Live / Movies / Series / Sports
+              based on its URL path (Xtream-Codes convention) and group name.
+              If categorization rules change, use “Recategorize” to re-bucket
+              existing rows without re-fetching the full M3U.
+            </p>
+
+            {categoryDebug && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Badge variant="secondary">
+                    Total: {categoryDebug.total}
+                  </Badge>
+                  {(["live", "movies", "series", "sports"] as const).map(
+                    (cat) => (
+                      <Badge key={cat} variant="outline" className="capitalize">
+                        {cat}: {categoryDebug.counts[cat] ?? 0}
+                      </Badge>
+                    ),
+                  )}
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground hover:text-foreground underline"
+                    onClick={() => setShowSamples((v) => !v)}
+                  >
+                    {showSamples ? "Hide" : "Show"} sample channels &amp; top
+                    groups
+                  </button>
+                </div>
+
+                {showSamples && (
+                  <div className="space-y-4">
+                    {(["live", "movies", "series", "sports"] as const).map(
+                      (cat) => (
+                        <div
+                          key={cat}
+                          className="rounded-md border bg-muted/30 p-3 space-y-2"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium capitalize">
+                              {cat}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {categoryDebug.counts[cat] ?? 0} total
+                            </span>
+                          </div>
+
+                          {categoryDebug.topGroups[cat]?.length > 0 && (
+                            <div className="text-xs space-y-1">
+                              <div className="text-muted-foreground">
+                                Top groups:
+                              </div>
+                              <div className="flex flex-wrap gap-1">
+                                {categoryDebug.topGroups[cat].map((g, i) => (
+                                  <Badge
+                                    key={i}
+                                    variant="secondary"
+                                    className="font-normal"
+                                  >
+                                    {g.groupName ?? "(no group)"} · {g.count}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          {categoryDebug.samples[cat]?.length > 0 && (
+                            <div className="text-xs space-y-1">
+                              <div className="text-muted-foreground">
+                                Sample channels:
+                              </div>
+                              <ul className="space-y-1">
+                                {categoryDebug.samples[cat].map((c) => (
+                                  <li
+                                    key={c.id}
+                                    className="font-mono break-all"
+                                  >
+                                    <span className="font-semibold">
+                                      {c.name}
+                                    </span>
+                                    <span className="text-muted-foreground">
+                                      {" "}
+                                      [{c.groupName ?? "—"}]
+                                    </span>
+                                    <div className="text-muted-foreground">
+                                      {c.url}
+                                    </div>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      ),
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={loadCategoryDebug}
+                disabled={isInspecting}
+              >
+                {isInspecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Eye className="h-4 w-4 mr-2" />
+                )}
+                {categoryDebug ? "Refresh diagnostic" : "Inspect"}
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleRecategorize}
+                disabled={isRecategorizing}
+              >
+                {isRecategorizing ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Wand2 className="h-4 w-4 mr-2" />
+                )}
+                Recategorize
               </Button>
             </div>
           </CardContent>
