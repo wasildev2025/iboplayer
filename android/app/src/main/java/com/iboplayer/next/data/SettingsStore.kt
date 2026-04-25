@@ -21,6 +21,13 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
     val deviceKey: Flow<String?> = context.dataStore.data.map { it[KEY_DEVICE_KEY] }
     val macAddress: Flow<String?> = context.dataStore.data.map { it[KEY_MAC] }
 
+    /** Admin-chosen theme key, e.g. "theme_0". Updated from /api/player/bootstrap. */
+    val themeNo: Flow<String?> = context.dataStore.data.map { it[KEY_THEME] }
+
+    suspend fun saveThemeNo(value: String) {
+        context.dataStore.edit { prefs -> prefs[KEY_THEME] = value }
+    }
+
     suspend fun savePanelSession(
         baseUrl: String,
         token: String,
@@ -48,5 +55,6 @@ class SettingsStore @Inject constructor(@ApplicationContext private val context:
         private val KEY_EXPIRE = stringPreferencesKey("expire_at")
         private val KEY_DEVICE_KEY = stringPreferencesKey("device_key")
         private val KEY_MAC = stringPreferencesKey("mac_address")
+        private val KEY_THEME = stringPreferencesKey("theme_no")
     }
 }

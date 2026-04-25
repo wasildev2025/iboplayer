@@ -21,7 +21,7 @@ export async function GET() {
       messageTwo: notification?.messageTwo ?? "",
     },
     macLength: macLength?.length ?? 12,
-    themeNo: theme?.themeNo ?? "theme_10",
+    themeNo: theme?.themeNo ?? "theme_orange",
     remoteVersion: remote?.version ?? "1.0",
     remoteUpdateUrl: remote?.url ?? "",
   });

@@ -63,24 +63,29 @@ export interface ThemeOption {
   description: string;
 }
 
+/**
+ * Available app themes. The `value` is the key persisted to the Theme table
+ * and shipped to Android via /api/player/bootstrap. Each value maps to a
+ * concrete accent palette in the Android client (see `paletteFor` in
+ * android/.../ui/theme/Color.kt) — keep this list and the device-side map
+ * in lockstep when adding a new theme.
+ */
 export const THEME_OPTIONS: ThemeOption[] = [
-  { value: "theme_0", label: "Theme 1", description: "Classic dark layout with standard navigation", tag: "All Ads" },
-  { value: "theme_1", label: "Theme 2", description: "Minimal dark interface with clean lines" },
-  { value: "theme_2", label: "Theme 3", description: "Modern gradient-based dark UI" },
-  { value: "theme_3", label: "Theme 4", description: "Compact layout with sidebar navigation" },
-  { value: "theme_4", label: "Theme 5", description: "Wide-screen optimized with large tiles" },
-  { value: "theme_5", label: "Theme 6", description: "Premium dark theme with accent colors" },
-  { value: "theme_6", label: "Theme 7", description: "Grid-based content with card layout" },
-  { value: "theme_7", label: "Theme 8", description: "Cinematic fullscreen browsing experience" },
-  { value: "theme_8", label: "Theme 9", description: "Streamlined menu with quick access" },
-  { value: "theme_9", label: "Theme 10", tag: "Manual Ads Only", tagColor: "orange", description: "Banner-ready layout for manual ad placement" },
-  { value: "theme_10", label: "Theme 11", tag: "Manual Ads Only", tagColor: "orange", description: "Carousel-style with manual ad zones" },
-  { value: "theme_11", label: "Theme 12", tag: "Manual Ads Only", tagColor: "orange", description: "Split-view layout optimized for ad display" },
-  { value: "theme_12", label: "Theme 13", description: "Elegant dark with subtle gradients" },
-  { value: "theme_13", label: "Theme 14", description: "Modern card-based content browser" },
-  { value: "theme_14", label: "Theme 15", description: "Clean minimal with focused content" },
-  { value: "theme_15", label: "Theme 16", tag: "Frame Ads Only", tagColor: "blue", description: "Frame ad zones with embedded content" },
-  { value: "theme_16", label: "Theme 17", tag: "Frame Ads Only", tagColor: "blue", description: "Multi-frame layout with ad integration" },
+  {
+    value: "theme_orange",
+    label: "Sunset Orange",
+    description: "The default — warm orange accents on deep navy.",
+  },
+  {
+    value: "theme_blue",
+    label: "Ocean Blue",
+    description: "Cool blue accents for a calmer, news-room feel.",
+  },
+  {
+    value: "theme_green",
+    label: "Forest Green",
+    description: "Vivid green accents — high contrast on dark surfaces.",
+  },
 ];
 
 export const AUTO_LAYOUT_OPTIONS = Array.from({ length: 14 }, (_, i) => ({

@@ -2,6 +2,7 @@ package com.iboplayer.next.ui.player
 
 import android.view.ContextThemeWrapper
 import android.view.ViewGroup
+import com.iboplayer.next.R
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -83,13 +84,17 @@ fun PlayerScreen(
                     if (viewModel.castAvailable) {
                         AndroidView(
                             factory = { ctx ->
-                                // MediaRouteButton's init asserts a non-translucent
-                                // window background to compute its icon's contrast.
-                                // Our Compose theme has a transparent window, so we
-                                // wrap with AppCompat which supplies a solid one.
+                                // MediaRouteButton's init reads the AppCompat
+                                // `colorPrimary` and computes a contrast ratio
+                                // against it. Our activity theme inherits from
+                                // the framework Material theme (no AppCompat
+                                // attr), so colorPrimary resolves to #0 and
+                                // the contrast check crashes. We wrap with our
+                                // dedicated MediaRouter theme that explicitly
+                                // sets a solid colorPrimary + windowBackground.
                                 val themed = ContextThemeWrapper(
                                     ctx,
-                                    androidx.appcompat.R.style.Theme_AppCompat,
+                                    R.style.Theme_IboPlayerNext_MediaRouter,
                                 )
                                 MediaRouteButton(themed).also { button ->
                                     runCatching {

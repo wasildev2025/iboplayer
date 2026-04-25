@@ -531,19 +531,21 @@ private fun PosterTile(
                 .border(1.dp, Color.White.copy(alpha = 0.08f), RoundedCornerShape(12.dp)),
             contentAlignment = Alignment.Center,
         ) {
+            // Always render the fallback icon underneath. AsyncImage draws on
+            // top once it loads, so successful logos cover the icon; failed
+            // or pending logos leave the icon visible — no blank tiles.
+            Icon(
+                imageVector = Icons.Outlined.PlayArrow,
+                contentDescription = null,
+                tint = ProtonOrange,
+                modifier = Modifier.size(36.dp),
+            )
             if (!channel.logo.isNullOrBlank()) {
                 AsyncImage(
                     model = channel.logo,
                     contentDescription = channel.name,
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Icon(
-                    imageVector = Icons.Outlined.PlayArrow,
-                    contentDescription = null,
-                    tint = ProtonOrange,
-                    modifier = Modifier.size(36.dp),
                 )
             }
             // Heart overlay — IconButton gives us the 48dp min touch target

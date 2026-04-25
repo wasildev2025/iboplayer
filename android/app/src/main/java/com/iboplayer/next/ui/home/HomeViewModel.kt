@@ -72,6 +72,12 @@ class HomeViewModel @Inject constructor(
             .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
         val existingToken = settings.playerToken.first().orEmpty()
 
+        // Pull the panel's public config (theme + login text + DNS list).
+        // Independent of session — runs every cold start so the admin's
+        // theme switch propagates on the next launch.
+        runCatching { api.bootstrap(base) }
+            .onSuccess { if (it.themeNo.isNotBlank()) settings.saveThemeNo(it.themeNo) }
+
         runCatching {
             if (existingToken.isBlank()) {
                 val login = api.login(base, deviceMac.current(), null, deviceName = DeviceName.display)
@@ -101,6 +107,8 @@ class HomeViewModel @Inject constructor(
                 .ifBlank { AppConfig.DEFAULT_PANEL_BASE_URL }
             val token = settings.playerToken.first().orEmpty()
             val result = runCatching {
+                runCatching { api.bootstrap(base) }
+                    .onSuccess { if (it.themeNo.isNotBlank()) settings.saveThemeNo(it.themeNo) }
                 if (token.isBlank()) {
                     val login = api.login(base, deviceMac.current(), null, deviceName = DeviceName.display)
                     val newToken = login.token ?: error("No token")

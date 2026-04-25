@@ -75,6 +75,7 @@ export default function EditCredentialProfilePage() {
     profileId: number;
     total: number;
     counts: Record<string, number>;
+    logoCoverage: Record<string, { withLogo: number; total: number }>;
     topGroups: Record<string, { groupName: string | null; count: number }[]>;
     samples: Record<
       string,
@@ -82,6 +83,7 @@ export default function EditCredentialProfilePage() {
         id: number;
         name: string;
         url: string;
+        logo: string | null;
         groupName: string | null;
         category: string;
       }[]
@@ -455,6 +457,17 @@ export default function EditCredentialProfilePage() {
                             </div>
                           )}
 
+                          {categoryDebug.logoCoverage?.[cat] && (
+                            <div className="text-xs text-muted-foreground">
+                              Logos:{" "}
+                              <span className="font-mono">
+                                {categoryDebug.logoCoverage[cat].withLogo}/
+                                {categoryDebug.logoCoverage[cat].total}
+                              </span>{" "}
+                              channels have a tvg-logo
+                            </div>
+                          )}
+
                           {categoryDebug.samples[cat]?.length > 0 && (
                             <div className="text-xs space-y-1">
                               <div className="text-muted-foreground">
@@ -474,7 +487,16 @@ export default function EditCredentialProfilePage() {
                                       [{c.groupName ?? "—"}]
                                     </span>
                                     <div className="text-muted-foreground">
-                                      {c.url}
+                                      url: {c.url}
+                                    </div>
+                                    <div
+                                      className={
+                                        c.logo
+                                          ? "text-muted-foreground"
+                                          : "text-amber-600"
+                                      }
+                                    >
+                                      logo: {c.logo ?? "(none)"}
                                     </div>
                                   </li>
                                 ))}

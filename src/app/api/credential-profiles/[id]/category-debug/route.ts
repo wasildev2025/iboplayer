@@ -45,6 +45,7 @@ export async function GET(
         id: true,
         name: true,
         url: true,
+        logo: true,
         groupName: true,
         category: true,
       },
@@ -72,10 +73,24 @@ export async function GET(
 
   const total = await prisma.channel.count({ where: { profileId } });
 
+  // How many channels per category actually have a non-empty logo URL.
+  // Lets the admin tell apart "feed has no tvg-logo" from "logos exist
+  // but the device isn't rendering them" without reading the samples.
+  const logoCoverage: Record<string, { withLogo: number; total: number }> = {};
+  for (const cat of categories) {
+    const withLogo = await prisma.channel.count({
+      where: { profileId, category: cat, NOT: { logo: null } },
+    });
+    const catTotal =
+      counts.find((c) => c.category === cat)?._count._all ?? 0;
+    logoCoverage[cat] = { withLogo, total: catTotal };
+  }
+
   return NextResponse.json({
     profileId,
     total,
     counts: Object.fromEntries(counts.map((c) => [c.category, c._count._all])),
+    logoCoverage,
     topGroups,
     samples,
   });
