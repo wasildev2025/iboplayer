@@ -1,19 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.IboPlayerNext" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+      Activity theme. Compose uses its own MaterialTheme so what's here only
+      seeds attrs read by classic Android widgets that we host inside Compose
+      via AndroidView — chiefly MediaRouteButton's route-picker DialogFragment,
+      which reads the AppCompat `colorPrimary` attribute and runs a contrast
+      check against it. Without these explicit attrs the framework parent
+      leaves `colorPrimary` (the non-namespaced AppCompat attr) unresolved
+      (returns 0 / fully transparent) and the dialog crashes when shown.
+    -->
+    <style name="Theme.IboPlayerNext" parent="Theme.AppCompat.NoActionBar">
+        <item name="colorPrimary">#F59E29</item>
+        <item name="colorPrimaryDark">#7A4912</item>
+        <item name="colorAccent">#F59E29</item>
+        <item name="android:colorPrimary">#F59E29</item>
+        <item name="android:windowBackground">#111C2E</item>
+        <!--
+          Tells MediaRouter which theme to use for its dialogs. Without this
+          the library walks back to Theme.MediaRouter and reads colorPrimary
+          from the activity theme — covered above, but pointing at a dedicated
+          theme is the canonical hookup and avoids any future regression.
+        -->
+        <item name="mediaRouteTheme">@style/Theme.IboPlayerNext.MediaRouter</item>
+    </style>
 
     <!--
-      Standalone theme used only when constructing MediaRouteButton.
-      MediaRouterThemeHelper reads `colorPrimary` (the AppCompat attr, not
-      the framework's `android:colorPrimary`) and computes a contrast ratio
-      against white. Our activity theme inherits from the framework's
-      Material theme, which leaves the AppCompat `colorPrimary` unresolved
-      (returns 0 / fully transparent) and crashes the contrast check.
-      We wrap the construction context with this theme to give the helper
-      a known-good non-translucent primary + a solid window background.
+      Theme used for MediaRouter dialogs (chooser + controller) and for
+      MediaRouteButton's construction context. Parent `Theme.MediaRouter`
+      provides all the route-router-specific attrs (mediaRouteButtonStyle,
+      mediaRouteChooserDialogStyle, etc.) that the library expects to find;
+      we then override the accent + window background to match our brand.
     -->
-    <style name="Theme.IboPlayerNext.MediaRouter" parent="Theme.AppCompat.NoActionBar">
+    <style name="Theme.IboPlayerNext.MediaRouter" parent="Theme.MediaRouter">
         <item name="colorPrimary">#F59E29</item>
+        <item name="colorPrimaryDark">#7A4912</item>
+        <item name="colorAccent">#F59E29</item>
         <item name="android:colorPrimary">#F59E29</item>
         <item name="android:windowBackground">#111C2E</item>
     </style>
