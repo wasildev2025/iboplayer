@@ -85,7 +85,9 @@ export async function POST(req: Request) {
       data: {
         macUserId: macUser.id,
         profileId: codeRow.profileId,
-        title: codeRow.profile.title || codeRow.profile.dns.title || null,
+        // Don't snapshot the title — playlistDtoFromRow always derives it live
+        // from profile.title / dns.title so admin renames propagate.
+        title: null,
         protection: false,
       },
       include: { profile: { include: { dns: true } } },

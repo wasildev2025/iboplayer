@@ -14,15 +14,18 @@ type PlaylistWithProfile = Playlist & {
 };
 
 /**
- * Build the player-facing DTO from a Playlist row. All credentials are
- * resolved through the linked CredentialProfile → DNS, so editing one
- * profile row instantly propagates to every playlist that references it.
- * No url/username/password is duplicated on the Playlist itself.
+ * Build the player-facing DTO from a Playlist row. The title is *always*
+ * derived live from the linked CredentialProfile → DNS so admin renames
+ * propagate to every device immediately. We deliberately ignore any title
+ * stored on the Playlist row itself — that field was a pre-refactor snapshot
+ * and is now superseded by the profile.
+ *
+ * Credentials are resolved through profile → DNS for the same reason: one
+ * edit, instant propagation, nothing duplicated client-side.
  */
 export function playlistDtoFromRow(row: PlaylistWithProfile): PlaylistDto {
   const { profile } = row;
   const title =
-    row.title?.trim() ||
     profile.title?.trim() ||
     profile.dns.title?.trim() ||
     hostFromUrl(profile.dns.url) ||

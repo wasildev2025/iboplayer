@@ -105,16 +105,33 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       );
     }
 
-    // Save the profile, then optionally sync the DNS title for "single source
-    // of truth" UX. Sync only when this is the *only* profile attached to the
-    // DNS — otherwise renaming one profile would clobber a sibling profile's
-    // preferred host name.
+    // Save the profile, optionally sync the DNS title, and clean up the old
+    // DNS row if the rotate orphaned it. All in one transaction so the DNS
+    // table can never end up with a stale entry pointing nowhere.
     const updated = await prisma.$transaction(async (tx) => {
+      const before = await tx.credentialProfile.findUnique({
+        where: { id: profileId },
+        select: { dnsId: true },
+      });
+      const oldDnsId = before?.dnsId;
+
       const p = await tx.credentialProfile.update({
         where: { id: profileId },
         data: { dnsId, username, password, title },
         include: { dns: true },
       });
+
+      // If the profile moved to a different DNS, garbage-collect the old DNS
+      // when nothing else references it. DNS rows are derived state — one
+      // per host actually in use, no orphans.
+      if (oldDnsId && oldDnsId !== p.dnsId) {
+        const remaining = await tx.credentialProfile.count({
+          where: { dnsId: oldDnsId },
+        });
+        if (remaining === 0) {
+          await tx.dns.delete({ where: { id: oldDnsId } });
+        }
+      }
 
       if (title) {
         const siblingCount = await tx.credentialProfile.count({
@@ -148,8 +165,25 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const authError = await requireAuth();
   if (authError) return authError;
   const { id } = await params;
+  const profileId = Number(id);
   try {
-    await prisma.credentialProfile.delete({ where: { id: Number(id) } });
+    await prisma.$transaction(async (tx) => {
+      const profile = await tx.credentialProfile.findUnique({
+        where: { id: profileId },
+        select: { dnsId: true },
+      });
+      if (!profile) throw new Error("Profile not found");
+
+      await tx.credentialProfile.delete({ where: { id: profileId } });
+
+      // Garbage-collect orphan DNS row, same rule as the rotate flow.
+      const remaining = await tx.credentialProfile.count({
+        where: { dnsId: profile.dnsId },
+      });
+      if (remaining === 0) {
+        await tx.dns.delete({ where: { id: profile.dnsId } });
+      }
+    });
     return NextResponse.json({ success: true });
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to delete profile";
