@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeMac } from "@/lib/mac";
 import {
+  playlistDtoFromProfile,
   playlistsForMacUser,
-  playlistsFromActivation,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
 import { deviceKeyFromMac, verifyPlayerToken } from "@/lib/player-jwt";
@@ -30,10 +30,7 @@ export async function GET(req: Request) {
   const normMac = normalizeMac(payload.mac);
 
   if (kind === "macUser") {
-    const row = await prisma.macUser.findUnique({
-      where: { id },
-      include: { dns: true },
-    });
+    const row = await prisma.macUser.findUnique({ where: { id } });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
     const playlists = await playlistsForMacUser(row);
     const expireAt = await trialExpireIsoForMac(normMac);
@@ -47,10 +44,10 @@ export async function GET(req: Request) {
   if (kind === "activation") {
     const row = await prisma.activationCode.findUnique({
       where: { id },
-      include: { dns: true },
+      include: { profile: { include: { dns: true } } },
     });
     if (!row) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    const playlists = playlistsFromActivation(row);
+    const playlists = [playlistDtoFromProfile(row.profile, row.id)];
     const expireAt = await trialExpireIsoForMac(normMac);
     return NextResponse.json({
       playlists,

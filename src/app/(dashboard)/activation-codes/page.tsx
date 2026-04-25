@@ -22,7 +22,11 @@ interface ActivationCode {
   id: number;
   code: string;
   status: string;
-  url: string;
+  profile: {
+    id: number;
+    username: string;
+    dns: { title: string; url: string };
+  };
 }
 
 interface PaginatedResponse {
@@ -111,7 +115,7 @@ export default function ActivationCodesPage() {
                 <TableRow>
                   <TableHead>Code</TableHead>
                   <TableHead>Status</TableHead>
-                  <TableHead>URL</TableHead>
+                  <TableHead>Profile (DNS · username)</TableHead>
                   <TableHead className="w-[120px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -136,8 +140,10 @@ export default function ActivationCodesPage() {
                           {item.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                        {item.url}
+                      <TableCell className="text-muted-foreground max-w-[260px] truncate">
+                        <span className="text-foreground font-medium">{item.profile.dns.title}</span>
+                        <span className="mx-1">·</span>
+                        <span className="font-mono text-xs">{item.profile.username}</span>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

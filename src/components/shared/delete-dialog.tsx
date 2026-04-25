@@ -18,6 +18,8 @@ interface DeleteDialogProps {
   title?: string;
   description?: string;
   children?: React.ReactNode;
+  /** When true, the trigger button is disabled (e.g. row is in use elsewhere). */
+  disabled?: boolean;
 }
 
 export function DeleteDialog({
@@ -25,6 +27,7 @@ export function DeleteDialog({
   title = "Delete Item",
   description = "Are you sure you want to delete this item? This action cannot be undone.",
   children,
+  disabled = false,
 }: DeleteDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -43,7 +46,7 @@ export function DeleteDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger>
         {children || (
-          <Button variant="destructive" size="icon">
+          <Button variant="destructive" size="icon" disabled={disabled}>
             <Trash2 className="h-4 w-4" />
           </Button>
         )}

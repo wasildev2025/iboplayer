@@ -8,6 +8,7 @@ import {
   Settings,
   Code,
   Key,
+  KeyRound,
   Calendar,
   Asterisk,
   MessageSquare,
@@ -40,7 +41,8 @@ interface NavGroup {
 
 const navItems = [
   { title: "DNS Settings", href: "/dns", icon: Settings },
-  { title: "MAC Users", href: "/mac-users", icon: Code },
+  { title: "Credential Profiles", href: "/credential-profiles", icon: KeyRound },
+  { title: "MAC Devices", href: "/mac-users", icon: Code },
   { title: "Activation Code", href: "/activation-codes", icon: Key },
   { title: "Set Expiration", href: "/trials", icon: Calendar },
   { title: "Set Demo", href: "/settings/demo", icon: Asterisk },
@@ -114,10 +116,10 @@ export function Sidebar({ open, onToggle }: SidebarProps) {
         <div className="flex h-16 items-center justify-between border-b border-border px-4">
           <Link href="/dns" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500 text-white font-bold text-sm">
-              SP
+              IPTV
             </div>
             <span className="text-sm font-semibold text-foreground">
-              S Player Panel
+              IPTV Player Panel
             </span>
           </Link>
           <button onClick={onToggle} className="lg:hidden text-muted-foreground hover:text-foreground">

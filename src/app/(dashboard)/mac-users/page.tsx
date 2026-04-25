@@ -22,10 +22,7 @@ interface MacUser {
   id: number;
   title: string;
   macAddress: string;
-  username: string;
-  password: string;
-  protection: boolean;
-  url: string;
+  _count: { playlists: number };
 }
 
 interface PaginatedResponse {
@@ -82,10 +79,10 @@ export default function MacUsersPage() {
 
   return (
     <>
-      <PageHeader title="MAC Users" description="Manage MAC address users">
+      <PageHeader title="MAC Devices" description="Devices that have logged in. Credentials live on credential profiles, not here.">
         <Button onClick={() => router.push("/mac-users/create")}>
           <Plus className="h-4 w-4 mr-2" />
-          New User
+          Register Device
         </Button>
       </PageHeader>
 
@@ -116,32 +113,26 @@ export default function MacUsersPage() {
                 <TableRow>
                   <TableHead>Title</TableHead>
                   <TableHead>MAC Address</TableHead>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Protection</TableHead>
-                  <TableHead>URL</TableHead>
+                  <TableHead>Playlists</TableHead>
                   <TableHead className="w-[160px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {result.data.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No users found
+                    <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
+                      No devices yet — they auto-register on first activation.
                     </TableCell>
                   </TableRow>
                 ) : (
                   result.data.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.title}</TableCell>
-                      <TableCell className="font-mono text-sm">{user.macAddress}</TableCell>
-                      <TableCell>{user.username}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.protection ? "default" : "secondary"}>
-                          {user.protection ? "YES" : "NO"}
-                        </Badge>
+                      <TableCell className="font-medium">
+                        {user.title || <span className="text-muted-foreground italic">untitled</span>}
                       </TableCell>
-                      <TableCell className="text-muted-foreground max-w-[200px] truncate">
-                        {user.url}
+                      <TableCell className="font-mono text-sm">{user.macAddress}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{user._count.playlists}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">

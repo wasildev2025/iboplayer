@@ -3,13 +3,32 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { M3uExtractor, type ExtractedM3u } from "@/components/shared/m3u-extractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, Save, UserCog, Link2 } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Save, UserCog, Tv } from "lucide-react";
 import { toast } from "sonner";
+
+interface PlaylistRow {
+  id: number;
+  title: string | null;
+  protection: boolean;
+  profile: {
+    id: number;
+    title: string | null;
+    username: string;
+    dns: { title: string; url: string };
+  };
+}
+
+interface MacUserData {
+  id: number;
+  macAddress: string;
+  title: string;
+  playlists: PlaylistRow[];
+}
 
 export default function EditMacUserPage() {
   const router = useRouter();
@@ -17,61 +36,27 @@ export default function EditMacUserPage() {
   const id = params.id as string;
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    macAddress: "",
-    protection: false,
-    title: "",
-    url: "",
-    username: "",
-    password: "",
-    dnsId: null as number | null,
-    dnsTitle: "",
-  });
+  const [data, setData] = useState<MacUserData | null>(null);
+  const [macAddress, setMacAddress] = useState("");
+  const [title, setTitle] = useState("");
 
   useEffect(() => {
     const fetchUser = async () => {
       try {
         const res = await fetch(`/api/mac-users/${id}`);
         if (!res.ok) throw new Error("Failed to fetch");
-        const data = await res.json();
-        setForm({
-          macAddress: data.macAddress || "",
-          protection: Boolean(data.protection),
-          title: data.title || "",
-          url: data.url || "",
-          username: data.username || "",
-          password: data.password || "",
-          dnsId: data.dnsId ?? null,
-          dnsTitle: data.dns?.title ?? "",
-        });
+        const json: MacUserData = await res.json();
+        setData(json);
+        setMacAddress(json.macAddress);
+        setTitle(json.title);
       } catch {
-        toast.error("Failed to load user data");
+        toast.error("Failed to load device");
       } finally {
         setIsLoading(false);
       }
     };
     fetchUser();
   }, [id]);
-
-  const updateField = (field: string, value: string | boolean) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleExtract = (data: ExtractedM3u) => {
-    setForm((prev) => ({
-      ...prev,
-      url: data.url,
-      username: data.username,
-      password: data.password,
-      dnsId: data.dnsId,
-      dnsTitle: data.dnsTitle,
-    }));
-    toast.success("M3U data extracted");
-  };
-
-  const handleUrlChange = (value: string) => {
-    setForm((prev) => ({ ...prev, url: value, dnsId: null, dnsTitle: "" }));
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,27 +65,19 @@ export default function EditMacUserPage() {
       const res = await fetch(`/api/mac-users/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          macAddress: form.macAddress,
-          protection: form.protection,
-          title: form.title,
-          url: form.url,
-          username: form.username,
-          password: form.password,
-          dnsId: form.dnsId,
-        }),
+        body: JSON.stringify({ macAddress: macAddress.trim(), title: title.trim() }),
       });
       if (!res.ok) throw new Error("Failed to update");
-      toast.success("MAC user updated successfully");
+      toast.success("Device updated");
       router.push("/mac-users");
     } catch {
-      toast.error("Failed to update MAC user");
+      toast.error("Failed to update device");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !data) {
     return (
       <div className="flex items-center justify-center py-12">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -110,16 +87,17 @@ export default function EditMacUserPage() {
 
   return (
     <>
-      <PageHeader title="Edit MAC User" description="Update MAC address user details" />
+      <PageHeader
+        title={data.title || "Edit Device"}
+        description={data.macAddress}
+      />
 
       <div className="max-w-2xl mx-auto space-y-6">
-        <M3uExtractor onExtract={handleExtract} />
-
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <UserCog className="h-5 w-5" />
-              Edit MAC User
+              Device Details
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -128,68 +106,19 @@ export default function EditMacUserPage() {
                 <Label htmlFor="macAddress">MAC Address</Label>
                 <Input
                   id="macAddress"
-                  value={form.macAddress}
-                  onChange={(e) => updateField("macAddress", e.target.value)}
+                  value={macAddress}
+                  onChange={(e) => setMacAddress(e.target.value)}
                   placeholder="XX:XX:XX:XX:XX:XX"
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="protection">Protection</Label>
-                <select
-                  id="protection"
-                  value={form.protection ? "YES" : "NO"}
-                  onChange={(e) => updateField("protection", e.target.value === "YES")}
-                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <option value="YES">YES</option>
-                  <option value="NO">NO</option>
-                </select>
-              </div>
-              <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
                   id="title"
-                  value={form.title}
-                  onChange={(e) => updateField("title", e.target.value)}
-                  placeholder="Enter title"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="url">DNS / URL</Label>
-                <Input
-                  id="url"
-                  value={form.url}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  placeholder="https://..."
-                  required
-                />
-                {form.dnsId && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Link2 className="h-3 w-3" />
-                    Linked to DNS: <span className="font-medium">{form.dnsTitle}</span> (id {form.dnsId})
-                  </p>
-                )}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={form.username}
-                  onChange={(e) => updateField("username", e.target.value)}
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  value={form.password}
-                  onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Enter password"
-                  required
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="e.g. Living Room Box"
                 />
               </div>
               <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -198,9 +127,51 @@ export default function EditMacUserPage() {
                 ) : (
                   <Save className="h-4 w-4 mr-2" />
                 )}
-                Update User
+                Save
               </Button>
             </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Tv className="h-5 w-5" />
+              Attached Playlists
+              <Badge variant="secondary" className="ml-2">
+                {data.playlists.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {data.playlists.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">
+                This device hasn&apos;t activated any playlists yet.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {data.playlists.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex items-center justify-between rounded-md border px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">
+                        {p.title || p.profile.title || p.profile.dns.title}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate font-mono">
+                        {p.profile.dns.url} · {p.profile.username}
+                      </div>
+                    </div>
+                    {p.protection && <Badge variant="outline">Protected</Badge>}
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-xs text-muted-foreground mt-3">
+              Each playlist resolves its credentials through its linked profile —
+              edit the profile (under Credential Profiles) to rotate them everywhere.
+            </p>
           </CardContent>
         </Card>
       </div>

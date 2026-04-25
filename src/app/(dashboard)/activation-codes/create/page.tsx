@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { M3uExtractor, type ExtractedM3u } from "@/components/shared/m3u-extractor";
+import { M3uExtractor, type ExtractedProfile } from "@/components/shared/m3u-extractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,66 +15,43 @@ import { generateActivationCode } from "@/lib/m3u-parser";
 export default function CreateActivationCodePage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    code: "",
-    url: "",
-    username: "",
-    password: "",
-    status: "NotUsed",
-    dnsId: null as number | null,
-    dnsTitle: "",
-  });
+  const [code, setCode] = useState("");
+  const [profile, setProfile] = useState<ExtractedProfile | null>(null);
 
   useEffect(() => {
-    setForm((prev) => ({ ...prev, code: generateActivationCode() }));
+    setCode(generateActivationCode());
   }, []);
 
-  const updateField = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleExtract = (data: ExtractedM3u) => {
-    setForm((prev) => ({
-      ...prev,
-      url: data.url,
-      username: data.username,
-      password: data.password,
-      dnsId: data.dnsId,
-      dnsTitle: data.dnsTitle,
-    }));
-    toast.success("M3U data extracted");
-  };
-
-  const handleUrlChange = (value: string) => {
-    setForm((prev) => ({ ...prev, url: value, dnsId: null, dnsTitle: "" }));
-  };
-
   const regenerateCode = () => {
-    setForm((prev) => ({ ...prev, code: generateActivationCode() }));
+    setCode(generateActivationCode());
     toast.success("New code generated");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profile) {
+      toast.error("Extract an M3U link first to link a credential profile");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await fetch("/api/activation-codes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: form.code,
-          url: form.url,
-          username: form.username,
-          password: form.password,
-          status: form.status,
-          dnsId: form.dnsId,
+          code,
+          profileId: profile.profileId,
         }),
       });
-      if (!res.ok) throw new Error("Failed to create");
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error(json.error || "Failed to create");
+      }
       toast.success("Activation code created successfully");
       router.push("/activation-codes");
-    } catch {
-      toast.error("Failed to create activation code");
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Failed to create activation code";
+      toast.error(msg);
     } finally {
       setIsSubmitting(false);
     }
@@ -85,7 +62,7 @@ export default function CreateActivationCodePage() {
       <PageHeader title="Create Activation Code" description="Generate a new activation code" />
 
       <div className="max-w-2xl mx-auto space-y-6">
-        <M3uExtractor onExtract={handleExtract} />
+        <M3uExtractor onExtract={setProfile} />
 
         <Card>
           <CardHeader>
@@ -101,8 +78,8 @@ export default function CreateActivationCodePage() {
                 <div className="flex gap-2">
                   <Input
                     id="code"
-                    value={form.code}
-                    onChange={(e) => updateField("code", e.target.value)}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
                     className="font-mono flex-1"
                     required
                   />
@@ -111,50 +88,43 @@ export default function CreateActivationCodePage() {
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  Auto-generated — edit to set a custom code, or click the refresh button.
+                  Auto-generated — edit to set a custom code, or refresh.
                 </p>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="url">DNS / URL</Label>
-                <Input
-                  id="url"
-                  value={form.url}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  placeholder="https://..."
-                  required
-                />
-                {form.dnsId && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Link2 className="h-3 w-3" />
-                    Linked to DNS: <span className="font-medium">{form.dnsTitle}</span> (id {form.dnsId})
+                <Label>Linked Credential Profile</Label>
+                {profile ? (
+                  <div className="rounded-lg border bg-muted/30 px-3 py-3 space-y-1 text-sm">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      Profile #{profile.profileId} — {profile.dnsTitle}
+                    </div>
+                    <div className="text-muted-foreground text-xs grid grid-cols-[80px_1fr] gap-x-3 gap-y-1">
+                      <span>DNS</span>
+                      <span className="font-mono break-all">{profile.dnsUrl}</span>
+                      <span>Username</span>
+                      <span className="font-mono">{profile.username}</span>
+                      <span>Password</span>
+                      <span className="font-mono">{"•".repeat(Math.min(profile.password.length, 12))}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Future credential rotations only need a single edit on this profile —
+                      every code that uses it picks up the new values automatically.
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground rounded-lg border border-dashed px-3 py-4 text-center">
+                    Paste an M3U link above to extract and link a credential profile.
                   </p>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={form.username}
-                  onChange={(e) => updateField("username", e.target.value)}
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  value={form.password}
-                  onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Enter password"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Input id="status" value={form.status} readOnly className="bg-muted" />
-              </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={isSubmitting || !profile}
+              >
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (

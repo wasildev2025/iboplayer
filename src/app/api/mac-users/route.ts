@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { requireAuth } from "@/lib/api-auth";
 
+/**
+ * Admin list of registered devices. Each device auto-registers on first
+ * activation via the player API; this endpoint is read-mostly for the admin
+ * to view/clean up devices, not to create them with credentials.
+ */
 export async function GET(req: Request) {
   const authError = await requireAuth();
   if (authError) return authError;
@@ -14,9 +19,8 @@ export async function GET(req: Request) {
   const where = search
     ? {
         OR: [
-          { macAddress: { contains: search } },
-          { title: { contains: search } },
-          { username: { contains: search } },
+          { macAddress: { contains: search, mode: "insensitive" as const } },
+          { title: { contains: search, mode: "insensitive" as const } },
         ],
       }
     : {};
@@ -24,6 +28,7 @@ export async function GET(req: Request) {
   const [items, total] = await Promise.all([
     prisma.macUser.findMany({
       where,
+      include: { _count: { select: { playlists: true } } },
       orderBy: { id: "desc" },
       skip: (page - 1) * pageSize,
       take: pageSize,
@@ -39,20 +44,29 @@ export async function GET(req: Request) {
   });
 }
 
+/**
+ * Admin-side device creation. No credentials — playlists carry profileIds.
+ * Body: { macAddress: string, title?: string }
+ */
 export async function POST(req: Request) {
   const authError = await requireAuth();
   if (authError) return authError;
   const data = await req.json();
-  const item = await prisma.macUser.create({
-    data: {
-      macAddress: data.macAddress,
-      protection: data.protection,
-      title: data.title,
-      url: data.url,
-      username: data.username,
-      password: data.password,
-      dnsId: typeof data.dnsId === "number" ? data.dnsId : null,
-    },
-  });
-  return NextResponse.json(item);
+  const macAddress =
+    typeof data.macAddress === "string" ? data.macAddress.trim() : "";
+  if (!macAddress) {
+    return NextResponse.json({ error: "macAddress is required" }, { status: 400 });
+  }
+  try {
+    const item = await prisma.macUser.create({
+      data: {
+        macAddress,
+        title: typeof data.title === "string" ? data.title : "",
+      },
+    });
+    return NextResponse.json(item);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Create failed";
+    return NextResponse.json({ error: message }, { status: 400 });
+  }
 }

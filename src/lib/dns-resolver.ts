@@ -1,20 +1,5 @@
 import { prisma } from "@/lib/db";
 
-type WithDnsAndUrl = {
-  url: string;
-  dnsId?: number | null;
-  dns?: { url: string } | null;
-};
-
-/**
- * Returns the effective server URL for a row that may have a DNS FK or a
- * legacy inline `url` string. Prefers the FK when present so a single DNS
- * edit propagates everywhere it's referenced.
- */
-export function resolveDnsUrl(row: WithDnsAndUrl): string {
-  return row.dns?.url || row.url;
-}
-
 /**
  * Normalizes a URL to a canonical "host form" usable as a DNS row's `url`
  * column — strips `get.php?...`, trailing slashes, and query strings. Returns

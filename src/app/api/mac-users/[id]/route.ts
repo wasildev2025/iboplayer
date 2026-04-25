@@ -8,7 +8,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params;
   const item = await prisma.macUser.findUnique({
     where: { id: Number(id) },
-    include: { dns: true },
+    include: {
+      playlists: { include: { profile: { include: { dns: true } } } },
+    },
   });
   if (!item) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(item);
@@ -22,13 +24,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   const item = await prisma.macUser.update({
     where: { id: Number(id) },
     data: {
-      macAddress: data.macAddress,
-      protection: data.protection,
-      title: data.title,
-      url: data.url,
-      username: data.username,
-      password: data.password,
-      dnsId: typeof data.dnsId === "number" ? data.dnsId : null,
+      macAddress:
+        typeof data.macAddress === "string" ? data.macAddress : undefined,
+      title: typeof data.title === "string" ? data.title : undefined,
     },
   });
   return NextResponse.json(item);
@@ -38,6 +36,8 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const authError = await requireAuth();
   if (authError) return authError;
   const { id } = await params;
+  // Cascades to the device's playlists (Prisma onDelete: Cascade) — does NOT
+  // touch profiles, since they're shared across devices and codes.
   await prisma.macUser.delete({ where: { id: Number(id) } });
   return NextResponse.json({ success: true });
 }

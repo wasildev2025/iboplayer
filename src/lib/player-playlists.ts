@@ -1,7 +1,6 @@
-import type { ActivationCode, Dns, MacUser, Playlist } from "@prisma/client";
+import type { CredentialProfile, Dns, MacUser, Playlist } from "@prisma/client";
 import { prisma } from "@/lib/db";
 import { buildM3uPlaylistUrl, normalizeMac } from "@/lib/mac";
-import { resolveDnsUrl } from "@/lib/dns-resolver";
 
 export type PlaylistDto = {
   id: number;
@@ -10,75 +9,71 @@ export type PlaylistDto = {
   protection: boolean;
 };
 
-export function playlistDtoFromRow(row: Playlist & { dns: Dns | null }): PlaylistDto {
-  const serverUrl = resolveDnsUrl(row);
-  // Prefer DNS title so renaming a DNS propagates everywhere, and so legacy
-  // rows that stored the activation code as their title get cleaned up
-  // automatically without a DB migration.
+type PlaylistWithProfile = Playlist & {
+  profile: CredentialProfile & { dns: Dns };
+};
+
+/**
+ * Build the player-facing DTO from a Playlist row. All credentials are
+ * resolved through the linked CredentialProfile → DNS, so editing one
+ * profile row instantly propagates to every playlist that references it.
+ * No url/username/password is duplicated on the Playlist itself.
+ */
+export function playlistDtoFromRow(row: PlaylistWithProfile): PlaylistDto {
+  const { profile } = row;
   const title =
-    row.dns?.title?.trim() ||
-    hostFromUrl(serverUrl) ||
     row.title?.trim() ||
+    profile.title?.trim() ||
+    profile.dns.title?.trim() ||
+    hostFromUrl(profile.dns.url) ||
     "Playlist";
   return {
     id: row.id,
     title,
-    playlistUrl: buildM3uPlaylistUrl(serverUrl, row.username, row.password),
+    playlistUrl: buildM3uPlaylistUrl(profile.dns.url, profile.username, profile.password),
     protection: row.protection,
   };
 }
 
 /**
- * Returns all Playlist rows for a MacUser, resolving DNS FK when present.
- * Falls back to the legacy single-playlist stored on MacUser itself if the
- * relation is empty (migration path for pre-multi-playlist data).
+ * Returns all playlists for a MacUser, each resolved against its current
+ * credential profile. No legacy single-playlist-on-MacUser fallback — every
+ * playlist now lives in the Playlist table with a profileId.
  */
-export async function playlistsForMacUser(
-  macUser: MacUser & { dns?: Dns | null },
-): Promise<PlaylistDto[]> {
+export async function playlistsForMacUser(macUser: MacUser): Promise<PlaylistDto[]> {
   const rows = await prisma.playlist.findMany({
     where: { macUserId: macUser.id },
-    include: { dns: true },
+    include: { profile: { include: { dns: true } } },
     orderBy: { id: "asc" },
   });
-  if (rows.length > 0) return rows.map(playlistDtoFromRow);
-
-  const legacyDns = macUser.dns ?? (
-    macUser.dnsId ? await prisma.dns.findUnique({ where: { id: macUser.dnsId } }) : null
-  );
-  const serverUrl = resolveDnsUrl({
-    url: macUser.url,
-    dnsId: macUser.dnsId,
-    dns: legacyDns,
-  });
-  const legacyTitle =
-    legacyDns?.title?.trim() ||
-    hostFromUrl(serverUrl) ||
-    macUser.title?.trim() ||
-    "Playlist";
-  return [
-    {
-      id: macUser.id,
-      title: legacyTitle,
-      playlistUrl: buildM3uPlaylistUrl(serverUrl, macUser.username, macUser.password),
-      protection: macUser.protection,
-    },
-  ];
+  return rows.map(playlistDtoFromRow);
 }
 
-export function playlistsFromActivation(
-  row: ActivationCode & { dns: Dns | null },
-): PlaylistDto[] {
-  const serverUrl = resolveDnsUrl(row);
-  const title = row.dns?.title?.trim() || hostFromUrl(serverUrl) || row.code;
-  return [
-    {
-      id: row.id,
-      title,
-      playlistUrl: buildM3uPlaylistUrl(serverUrl, row.username, row.password),
-      protection: false,
-    },
-  ];
+/**
+ * Build a one-shot DTO from a CredentialProfile (used by the activation flow
+ * before the device has any persisted Playlist rows).
+ */
+export function playlistDtoFromProfile(
+  profile: CredentialProfile & { dns: Dns },
+  fallbackId: number,
+): PlaylistDto {
+  return {
+    id: fallbackId,
+    title:
+      profile.title?.trim() ||
+      profile.dns.title?.trim() ||
+      hostFromUrl(profile.dns.url) ||
+      "Playlist",
+    playlistUrl: buildM3uPlaylistUrl(profile.dns.url, profile.username, profile.password),
+    protection: false,
+  };
+}
+
+export async function trialExpireIsoForMac(normMac: string): Promise<string | null> {
+  const trials = await prisma.trial.findMany();
+  const trial = trials.find((t) => normalizeMac(t.macAddress) === normMac);
+  if (!trial) return null;
+  return trial.expireDate.toISOString();
 }
 
 function hostFromUrl(raw: string): string {
@@ -87,11 +82,4 @@ function hostFromUrl(raw: string): string {
   } catch {
     return "";
   }
-}
-
-export async function trialExpireIsoForMac(normMac: string): Promise<string | null> {
-  const trials = await prisma.trial.findMany();
-  const trial = trials.find((t) => normalizeMac(t.macAddress) === normMac);
-  if (!trial) return null;
-  return trial.expireDate.toISOString();
 }

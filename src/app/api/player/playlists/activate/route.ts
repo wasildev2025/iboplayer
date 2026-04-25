@@ -3,36 +3,24 @@ import { prisma } from "@/lib/db";
 import { normalizeMac } from "@/lib/mac";
 import { deviceKeyFromMac, signPlayerToken } from "@/lib/player-jwt";
 import {
-  playlistDtoFromRow,
+  playlistDtoFromProfile,
   playlistsForMacUser,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
 
 /**
- * Redeem an activation code for a device.
- *
- * No bearer auth required — a device without a prior session needs this to
- * register itself for the first time. The MAC is supplied in the body.
+ * Redeem an activation code for a device. No bearer auth required — this is
+ * how a fresh device first registers itself.
  *
  * Body: { macAddress: string, activationCode: string }
- * Response: { token, playlists, added, expireAt, deviceKey }
  *
  * Behavior:
- *   - Auto-creates a MacUser for this MAC if none exists (copies the code's
- *     DNS/credentials onto the new MacUser so it stands on its own).
- *   - Creates a Playlist row under the MacUser (including dnsId from the code).
+ *   - Auto-creates a MacUser for this MAC if none exists.
+ *   - Creates a Playlist row under the MacUser linked to the code's profile.
  *   - Marks the ActivationCode as Used.
- *   - Rejects duplicate playlists for the same MacUser.
+ *   - Rejects duplicate playlists (same MacUser + same profile).
  *   - Returns a fresh player JWT so the device can call /playlists next.
  */
-function hostOf(raw: string): string {
-  try {
-    return new URL(raw).host;
-  } catch {
-    return "";
-  }
-}
-
 export async function POST(req: Request) {
   let body: { macAddress?: unknown; activationCode?: unknown };
   try {
@@ -52,7 +40,7 @@ export async function POST(req: Request) {
 
   const codeRow = await prisma.activationCode.findFirst({
     where: { code },
-    include: { dns: true },
+    include: { profile: { include: { dns: true } } },
   });
   if (!codeRow) {
     return NextResponse.json({ error: "Invalid activation code" }, { status: 401 });
@@ -62,29 +50,20 @@ export async function POST(req: Request) {
   }
 
   const normMac = normalizeMac(macRaw);
-  const existingUsers = await prisma.macUser.findMany();
-  const existing = existingUsers.find((u) => normalizeMac(u.macAddress) === normMac);
 
-  const macUser =
-    existing ??
-    (await prisma.macUser.create({
-      data: {
-        macAddress: normMac,
-        protection: false,
-        title: `Device ${normMac}`,
-        url: codeRow.url,
-        username: codeRow.username,
-        password: codeRow.password,
-        dnsId: codeRow.dnsId,
-      },
-    }));
+  const macUser = await prisma.macUser.upsert({
+    where: { macAddress: normMac },
+    update: {},
+    create: {
+      macAddress: normMac,
+      title: `Device ${normMac}`,
+    },
+  });
 
   const duplicate = await prisma.playlist.findFirst({
     where: {
       macUserId: macUser.id,
-      url: codeRow.url,
-      username: codeRow.username,
-      password: codeRow.password,
+      profileId: codeRow.profileId,
     },
   });
   if (duplicate) {
@@ -94,20 +73,15 @@ export async function POST(req: Request) {
     );
   }
 
-  const playlistTitle = codeRow.dns?.title?.trim() || hostOf(codeRow.url) || codeRow.url;
-
   const created = await prisma.$transaction(async (tx) => {
     const row = await tx.playlist.create({
       data: {
         macUserId: macUser.id,
-        title: playlistTitle,
-        url: codeRow.url,
-        username: codeRow.username,
-        password: codeRow.password,
-        dnsId: codeRow.dnsId,
+        profileId: codeRow.profileId,
+        title: codeRow.profile.title || codeRow.profile.dns.title || null,
         protection: false,
       },
-      include: { dns: true },
+      include: { profile: { include: { dns: true } } },
     });
     await tx.activationCode.update({
       where: { id: codeRow.id },
@@ -116,18 +90,14 @@ export async function POST(req: Request) {
     return row;
   });
 
-  const macUserWithDns = await prisma.macUser.findUnique({
-    where: { id: macUser.id },
-    include: { dns: true },
-  });
-  const playlists = await playlistsForMacUser(macUserWithDns!);
+  const playlists = await playlistsForMacUser(macUser);
   const token = signPlayerToken({ sub: `macUser:${macUser.id}`, mac: normMac });
   const expireAt = await trialExpireIsoForMac(normMac);
 
   return NextResponse.json({
     token,
     playlists,
-    added: playlistDtoFromRow(created),
+    added: playlistDtoFromProfile(created.profile, created.id),
     expireAt,
     deviceKey: deviceKeyFromMac(normMac),
   });

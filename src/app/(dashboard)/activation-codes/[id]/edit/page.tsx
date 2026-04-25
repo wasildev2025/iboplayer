@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { PageHeader } from "@/components/shared/page-header";
-import { M3uExtractor, type ExtractedM3u } from "@/components/shared/m3u-extractor";
+import { M3uExtractor, type ExtractedProfile } from "@/components/shared/m3u-extractor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,36 +12,45 @@ import { Loader2, Save, KeyRound, RefreshCw, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { generateActivationCode } from "@/lib/m3u-parser";
 
+interface CodeData {
+  code: string;
+  status: string;
+  profileId: number;
+  profile: {
+    id: number;
+    dnsId: number;
+    username: string;
+    password: string;
+    dns: { title: string; url: string };
+  };
+}
+
 export default function EditActivationCodePage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [form, setForm] = useState({
-    code: "",
-    url: "",
-    username: "",
-    password: "",
-    status: "NotUsed",
-    dnsId: null as number | null,
-    dnsTitle: "",
-  });
+
+  const [code, setCode] = useState("");
+  const [status, setStatus] = useState("NotUsed");
+  const [profile, setProfile] = useState<ExtractedProfile | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
         const res = await fetch(`/api/activation-codes/${id}`);
         if (!res.ok) throw new Error("Failed to fetch");
-        const data = await res.json();
-        setForm({
-          code: data.code || "",
-          url: data.url || "",
-          username: data.username || "",
-          password: data.password || "",
-          status: data.status || "NotUsed",
-          dnsId: data.dnsId ?? null,
-          dnsTitle: data.dns?.title ?? "",
+        const data: CodeData = await res.json();
+        setCode(data.code || "");
+        setStatus(data.status || "NotUsed");
+        setProfile({
+          profileId: data.profile.id,
+          dnsId: data.profile.dnsId,
+          dnsTitle: data.profile.dns.title,
+          dnsUrl: data.profile.dns.url,
+          username: data.profile.username,
+          password: data.profile.password,
         });
       } catch {
         toast.error("Failed to load activation code");
@@ -52,45 +61,26 @@ export default function EditActivationCodePage() {
     load();
   }, [id]);
 
-  const updateField = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const handleExtract = (data: ExtractedM3u) => {
-    setForm((prev) => ({
-      ...prev,
-      url: data.url,
-      username: data.username,
-      password: data.password,
-      dnsId: data.dnsId,
-      dnsTitle: data.dnsTitle,
-    }));
-    toast.success("M3U data extracted");
-  };
-
-  const handleUrlChange = (value: string) => {
-    setForm((prev) => ({ ...prev, url: value, dnsId: null, dnsTitle: "" }));
-  };
-
   const regenerateCode = () => {
-    setForm((prev) => ({ ...prev, code: generateActivationCode() }));
+    setCode(generateActivationCode());
     toast.success("New code generated");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!profile) {
+      toast.error("Activation code must be linked to a profile");
+      return;
+    }
     setIsSubmitting(true);
     try {
       const res = await fetch(`/api/activation-codes/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: form.code,
-          url: form.url,
-          username: form.username,
-          password: form.password,
-          status: form.status,
-          dnsId: form.dnsId,
+          code,
+          status,
+          profileId: profile.profileId,
         }),
       });
       if (!res.ok) {
@@ -117,10 +107,13 @@ export default function EditActivationCodePage() {
 
   return (
     <>
-      <PageHeader title="Edit Activation Code" description="Update code, DNS, or credentials" />
+      <PageHeader title="Edit Activation Code" description="Update code, status, or relink to a different credential profile" />
 
       <div className="max-w-2xl mx-auto space-y-6">
-        <M3uExtractor onExtract={handleExtract} />
+        <M3uExtractor
+          onExtract={setProfile}
+          helpText="Paste a different M3U link to relink this code to another credential profile. To rotate the credentials of the current profile (and propagate to every code using it), edit the profile directly."
+        />
 
         <Card>
           <CardHeader>
@@ -136,8 +129,8 @@ export default function EditActivationCodePage() {
                 <div className="flex gap-2">
                   <Input
                     id="code"
-                    value={form.code}
-                    onChange={(e) => updateField("code", e.target.value)}
+                    value={code}
+                    onChange={(e) => setCode(e.target.value)}
                     className="font-mono flex-1"
                     required
                   />
@@ -145,59 +138,44 @@ export default function EditActivationCodePage() {
                     <RefreshCw className="h-4 w-4" />
                   </Button>
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  Edit to set a custom code, or regenerate a new one.
-                </p>
               </div>
+
               <div className="space-y-2">
-                <Label htmlFor="url">DNS / URL</Label>
-                <Input
-                  id="url"
-                  value={form.url}
-                  onChange={(e) => handleUrlChange(e.target.value)}
-                  placeholder="https://..."
-                  required
-                />
-                {form.dnsId && (
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Link2 className="h-3 w-3" />
-                    Linked to DNS: <span className="font-medium">{form.dnsTitle}</span> (id {form.dnsId})
-                  </p>
+                <Label>Linked Credential Profile</Label>
+                {profile ? (
+                  <div className="rounded-lg border bg-muted/30 px-3 py-3 space-y-1 text-sm">
+                    <div className="flex items-center gap-2 font-medium">
+                      <Link2 className="h-4 w-4 text-muted-foreground" />
+                      Profile #{profile.profileId} — {profile.dnsTitle}
+                    </div>
+                    <div className="text-muted-foreground text-xs grid grid-cols-[80px_1fr] gap-x-3 gap-y-1">
+                      <span>DNS</span>
+                      <span className="font-mono break-all">{profile.dnsUrl}</span>
+                      <span>Username</span>
+                      <span className="font-mono">{profile.username}</span>
+                      <span>Password</span>
+                      <span className="font-mono">{"•".repeat(Math.min(profile.password.length, 12))}</span>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">No profile linked.</p>
                 )}
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  value={form.username}
-                  onChange={(e) => updateField("username", e.target.value)}
-                  placeholder="Enter username"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  value={form.password}
-                  onChange={(e) => updateField("password", e.target.value)}
-                  placeholder="Enter password"
-                  required
-                />
-              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <select
                   id="status"
-                  value={form.status}
-                  onChange={(e) => updateField("status", e.target.value)}
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                 >
                   <option value="NotUsed">NotUsed</option>
                   <option value="Used">Used</option>
                 </select>
               </div>
-              <Button type="submit" className="w-full" disabled={isSubmitting}>
+
+              <Button type="submit" className="w-full" disabled={isSubmitting || !profile}>
                 {isSubmitting ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 ) : (

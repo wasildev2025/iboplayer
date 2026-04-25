@@ -172,7 +172,7 @@ private fun BrandHeader() {
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = "IBO",
+                text = "IPTV",
                 color = Color.White,
                 fontWeight = FontWeight.Black,
                 fontSize = 22.sp,

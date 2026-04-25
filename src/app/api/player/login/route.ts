@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { normalizeMac } from "@/lib/mac";
 import {
+  playlistDtoFromProfile,
   playlistsForMacUser,
-  playlistsFromActivation,
   trialExpireIsoForMac,
 } from "@/lib/player-playlists";
 import { deviceKeyFromMac, signPlayerToken } from "@/lib/player-jwt";
@@ -11,8 +11,10 @@ import { deviceKeyFromMac, signPlayerToken } from "@/lib/player-jwt";
 /**
  * Device login (no admin session).
  * Body: { macAddress: string, activationCode?: string }
- * - With activationCode: validates code (NotUsed → Used), returns playlists + JWT.
- * - Without activationCode: resolves MAC against MacUser (playlist assigned in panel).
+ * - With activationCode: validates code (NotUsed), returns the code's profile
+ *   as a one-shot playlist DTO + JWT scoped to that activation.
+ * - Without activationCode: resolves MAC against MacUser and returns its
+ *   persisted playlists.
  */
 export async function POST(req: Request) {
   try {
@@ -29,8 +31,7 @@ export async function POST(req: Request) {
     const trials = await prisma.trial.findMany();
     const trial = trials.find((t) => normalizeMac(t.macAddress) === mac);
 
-    const macUserRows = await prisma.macUser.findMany({ include: { dns: true } });
-    const macUser = macUserRows.find((u) => normalizeMac(u.macAddress) === mac);
+    const macUser = await prisma.macUser.findUnique({ where: { macAddress: mac } });
 
     if (!macUser && trial && trial.expireDate < new Date()) {
       return NextResponse.json({ error: "Subscription expired" }, { status: 403 });
@@ -39,7 +40,7 @@ export async function POST(req: Request) {
     if (activationCode) {
       const codeRow = await prisma.activationCode.findFirst({
         where: { code: activationCode },
-        include: { dns: true },
+        include: { profile: { include: { dns: true } } },
       });
       if (!codeRow) {
         return NextResponse.json({ error: "Invalid activation code" }, { status: 401 });
@@ -53,7 +54,7 @@ export async function POST(req: Request) {
         data: { status: "Used" },
       });
 
-      const playlists = playlistsFromActivation(codeRow);
+      const playlists = [playlistDtoFromProfile(codeRow.profile, codeRow.id)];
       const token = signPlayerToken({ sub: `activation:${codeRow.id}`, mac });
       const expireAt = await trialExpireIsoForMac(mac);
 

@@ -18,65 +18,81 @@ model User {
   password String
 }
 
+/// A DNS host (the IPTV provider's panel origin). Multiple credential
+/// profiles can share one host (different accounts on the same provider).
 model Dns {
   id    Int    @id @default(autoincrement())
   title String
   url   String @unique
 
-  macUsers        MacUser[]
-  activationCodes ActivationCode[]
-  playlists       Playlist[]
+  profiles CredentialProfile[]
 }
 
-model MacUser {
-  id         Int     @id @default(autoincrement())
-  macAddress String  @map("mac_address")
-  protection Boolean @default(false)
-  title      String
-  url        String
-  username   String
-  password   String
-  dnsId      Int?    @map("dns_id")
+/// A single (DNS host, username, password) credential bundle. Activation
+/// codes and playlists reference this — when the provider rotates anything,
+/// updating one profile row instantly propagates to every linked row via the
+/// FK. No duplicated url/username/password columns anywhere downstream.
+model CredentialProfile {
+  id        Int      @id @default(autoincrement())
+  title     String?
+  dnsId     Int      @map("dns_id")
+  username  String
+  password  String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-  dns       Dns?       @relation(fields: [dnsId], references: [id], onDelete: SetNull)
+  dns             Dns              @relation(fields: [dnsId], references: [id], onDelete: Restrict)
+  activationCodes ActivationCode[]
+  playlists       Playlist[]
+
+  @@unique([dnsId, username, password])
+  @@index([dnsId])
+  @@map("credential_profiles")
+}
+
+/// A code an end-user enters in the player to claim a playlist slot. The
+/// code carries no credentials of its own — it points at a CredentialProfile.
+model ActivationCode {
+  id        Int      @id @default(autoincrement())
+  code      String   @unique
+  status    String   @default("NotUsed")
+  profileId Int      @map("profile_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
+
+  @@index([profileId])
+  @@index([status])
+  @@map("activation_codes")
+}
+
+/// A device that has logged into the player (auto-registered on first
+/// activation). Carries no credentials — its playlists each own a profile.
+model MacUser {
+  id         Int    @id @default(autoincrement())
+  macAddress String @unique @map("mac_address")
+  title      String @default("")
+
   playlists Playlist[]
 
-  @@index([dnsId])
   @@map("mac_users")
 }
 
+/// A playlist on a device, pointing at the credentials it should use.
 model Playlist {
   id         Int     @id @default(autoincrement())
   macUserId  Int     @map("mac_user_id")
-  title      String
-  url        String
-  username   String  @default("")
-  password   String  @default("")
+  title      String?
   protection Boolean @default(false)
   pin        String?
-  dnsId      Int?    @map("dns_id")
+  profileId  Int     @map("profile_id")
 
-  macUser MacUser @relation(fields: [macUserId], references: [id], onDelete: Cascade)
-  dns     Dns?    @relation(fields: [dnsId], references: [id], onDelete: SetNull)
+  macUser MacUser           @relation(fields: [macUserId], references: [id], onDelete: Cascade)
+  profile CredentialProfile @relation(fields: [profileId], references: [id], onDelete: Restrict)
 
   @@index([macUserId])
-  @@index([dnsId])
+  @@index([profileId])
   @@map("playlists")
-}
-
-model ActivationCode {
-  id       Int    @id @default(autoincrement())
-  code     String @unique
-  url      String
-  username String
-  password String
-  status   String @default("NotUsed")
-  dnsId    Int?   @map("dns_id")
-
-  dns Dns? @relation(fields: [dnsId], references: [id], onDelete: SetNull)
-
-  @@index([dnsId])
-  @@map("activation_codes")
 }
 
 model Trial {
