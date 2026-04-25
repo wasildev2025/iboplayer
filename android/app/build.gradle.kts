@@ -19,10 +19,11 @@ android {
         versionName = "0.1.0"
 
         // Panel base URL baked into the APK. Override per build variant below.
+        // Release builds inherit this; debug builds override to a LAN dev URL.
         buildConfigField(
             "String",
             "PANEL_BASE_URL",
-            "\"https://panel.example.com\"",
+            "\"https://iboplayer-pi.vercel.app\"",
         )
     }
 
