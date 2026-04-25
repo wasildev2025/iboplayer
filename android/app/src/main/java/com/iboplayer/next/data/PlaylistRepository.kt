@@ -1,6 +1,11 @@
 package com.iboplayer.next.data
 
+import com.iboplayer.next.data.local.CATEGORY_LIVE
+import com.iboplayer.next.data.local.CATEGORY_MOVIES
+import com.iboplayer.next.data.local.CATEGORY_SERIES
+import com.iboplayer.next.data.local.CATEGORY_SPORTS
 import com.iboplayer.next.data.local.ChannelDao
+import com.iboplayer.next.data.local.GroupCount
 import com.iboplayer.next.data.local.PlaylistDao
 import com.iboplayer.next.data.local.PlaylistEntity
 import com.iboplayer.next.data.local.toEntity
@@ -31,6 +36,16 @@ class PlaylistRepository @Inject constructor(
     val playlists: Flow<List<PlaylistEntity>> = playlistDao.getAll()
 
     val connectedPlaylist: Flow<PlaylistEntity?> = playlistDao.getConnectedFlow()
+
+    fun channelsForCategory(category: String): Flow<List<Channel>> {
+        return channelDao.getByCategory(category).map { entities ->
+            entities.map { it.toExternal() }
+        }
+    }
+
+    fun groupsForCategory(category: String): Flow<List<GroupCount>> {
+        return channelDao.getGroupsByCategory(category)
+    }
 
     fun getChannelsByGroup(group: String): Flow<List<Channel>> {
         return channelDao.getByGroup(group).map { entities ->
@@ -70,11 +85,42 @@ class PlaylistRepository @Inject constructor(
                 val body = response.body ?: error("Empty response body")
                 body.charStream().buffered().use { reader ->
                     val remoteChannels = M3uParser.parse(reader)
+                    val entities = remoteChannels.map { ch ->
+                        ch.toEntity(category = categoryOf(ch.group))
+                    }
                     channelDao.deleteAll()
-                    channelDao.insertAll(remoteChannels.map { it.toEntity() })
+                    // Chunked insert keeps the SQLite transaction & cursor
+                    // pressure manageable for huge IPTV playlists (10k+ rows).
+                    entities.chunked(500).forEach { batch ->
+                        channelDao.insertAll(batch)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Classify a channel by its group-title using keyword heuristics. The
+     * derived category is stored on the row so the UI can query a single
+     * category (typically ~25% of the table) instead of loading every channel.
+     */
+    private fun categoryOf(group: String?): String {
+        val g = group?.uppercase().orEmpty()
+        return when {
+            SPORT_KEYWORDS.any { g.contains(it) } -> CATEGORY_SPORTS
+            SERIES_KEYWORDS.any { g.contains(it) } -> CATEGORY_SERIES
+            MOVIE_KEYWORDS.any { g.contains(it) } -> CATEGORY_MOVIES
+            else -> CATEGORY_LIVE
+        }
+    }
+
+    private companion object {
+        val MOVIE_KEYWORDS = listOf("MOVIE", "FILM", "CINEMA", "VOD")
+        val SERIES_KEYWORDS = listOf("SERIES", "SERIE", "TV SHOW", "SEASON", "TELEFILM")
+        val SPORT_KEYWORDS = listOf(
+            "SPORT", "FOOTBALL", "SOCCER", "NBA", "NFL", "UFC", "CRICKET",
+            "TENNIS", "F1", "MOTOR", "RUGBY", "BOXING", "GOLF",
+        )
     }
 
     suspend fun clearChannelCache() {

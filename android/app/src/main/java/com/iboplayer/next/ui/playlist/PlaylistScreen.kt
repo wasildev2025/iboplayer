@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
-import androidx.compose.material.icons.automirrored.outlined.ChevronRight
+import androidx.compose.material.icons.outlined.ChevronRight
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Lock
@@ -52,6 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -186,6 +187,49 @@ fun PlaylistScreen(
             onDismiss = viewModel::cancelPinDialog,
         )
     }
+
+    if (state.connecting) {
+        LoadingOverlay(message = "Loading channels…")
+    }
+}
+
+@Composable
+private fun LoadingOverlay(message: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.65f))
+            .pointerInput(Unit) {
+                awaitPointerEventScope {
+                    while (true) {
+                        awaitPointerEvent()
+                    }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .clip(RoundedCornerShape(18.dp))
+                .background(Color(0xFF0D1626))
+                .border(1.dp, ProtonGold.copy(alpha = 0.4f), RoundedCornerShape(18.dp))
+                .padding(horizontal = 32.dp, vertical = 28.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator(
+                color = ProtonOrange,
+                strokeWidth = 3.dp,
+                modifier = Modifier.size(40.dp),
+            )
+            Spacer(Modifier.height(16.dp))
+            Text(
+                text = message,
+                color = ProtonText,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
 }
 
 @Composable
@@ -299,7 +343,7 @@ private fun PlaylistCard(
         }
 
         Icon(
-            Icons.AutoMirrored.Outlined.ChevronRight,
+            Icons.Outlined.ChevronRight,
             contentDescription = null,
             tint = ProtonTextMuted,
         )

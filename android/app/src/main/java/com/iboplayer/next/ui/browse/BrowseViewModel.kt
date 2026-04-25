@@ -5,12 +5,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.iboplayer.next.data.Channel
 import com.iboplayer.next.data.PlaylistRepository
+import com.iboplayer.next.data.local.CATEGORY_LIVE
+import com.iboplayer.next.data.local.CATEGORY_MOVIES
+import com.iboplayer.next.data.local.CATEGORY_SERIES
+import com.iboplayer.next.data.local.CATEGORY_SPORTS
 import com.iboplayer.next.ui.channels.ChannelCategory
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -33,27 +42,74 @@ class BrowseViewModel @Inject constructor(
     private val _selectedGroup = MutableStateFlow<String?>(null)
     private val _query = MutableStateFlow("")
     private val _sort = MutableStateFlow(SortOrder.Added)
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing: StateFlow<Boolean> = _refreshing.asStateFlow()
+
+    init {
+        // First-open auto-refresh: pull the M3U if the channel cache is empty
+        // (fresh install / cache cleared) so users don't land on an empty grid.
+        viewModelScope.launch {
+            if (!repo.hasChannelCache()) refresh()
+        }
+    }
+
+    fun refresh() {
+        if (_refreshing.value) return
+        viewModelScope.launch {
+            _refreshing.update { true }
+            runCatching {
+                val connected = repo.getConnected() ?: return@runCatching
+                repo.refreshPlaylist(connected.playlistUrl)
+            }
+            _refreshing.update { false }
+        }
+    }
+
+    /**
+     * Channels + group counts scoped to the current category. Subscribing only
+     * to the active category's rows keeps the SQLite cursor window small and
+     * avoids loading the entire channel table (which OOMs on 10k+ playlists).
+     */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val categoryData: Flow<CategorySnapshot> =
+        _category.flatMapLatest { cat ->
+            val key = categoryKey(cat)
+            if (key != null) {
+                combine(
+                    repo.channelsForCategory(key),
+                    repo.groupsForCategory(key),
+                ) { channels, counts ->
+                    CategorySnapshot(
+                        category = cat,
+                        channels = channels,
+                        groups = counts.map { GroupRow(it.groupName, it.count) },
+                    )
+                }
+            } else {
+                // ChannelCategory.All — falls back to the full table. Not used
+                // by the current Home navigation but kept for completeness.
+                repo.channels.map { channels ->
+                    val groups = channels.asSequence()
+                        .mapNotNull { it.group }
+                        .groupingBy { it }
+                        .eachCount()
+                        .entries
+                        .map { GroupRow(it.key, it.value) }
+                        .sortedBy { it.title.lowercase() }
+                    CategorySnapshot(cat, channels, groups)
+                }
+            }
+        }
 
     val state: StateFlow<UiState> = combine(
-        repo.channels,
-        _category,
+        categoryData,
         _selectedGroup,
         _query,
         _sort,
-    ) { channels, category, selectedGroup, query, sort ->
-        val categoryChannels = channels.filter { matchesCategory(it.group, category) }
+    ) { snap, selectedGroup, query, sort ->
+        val effectiveGroup = selectedGroup ?: snap.groups.firstOrNull()?.title
 
-        val groupCounts = categoryChannels
-            .mapNotNull { it.group }
-            .groupingBy { it }
-            .eachCount()
-        val groups = groupCounts.entries
-            .map { GroupRow(it.key, it.value) }
-            .sortedBy { it.title }
-
-        val effectiveGroup = selectedGroup ?: groups.firstOrNull()?.title
-
-        val filteredItems = categoryChannels.asSequence()
+        val items = snap.channels.asSequence()
             .filter { effectiveGroup == null || it.group == effectiveGroup }
             .filter { query.isBlank() || it.name.contains(query, ignoreCase = true) }
             .toList()
@@ -66,10 +122,10 @@ class BrowseViewModel @Inject constructor(
             }
 
         UiState(
-            category = category,
-            groups = groups,
+            category = snap.category,
+            groups = snap.groups,
             selectedGroup = effectiveGroup,
-            items = filteredItems,
+            items = items,
             query = query,
             sort = sort,
         )
@@ -86,6 +142,12 @@ class BrowseViewModel @Inject constructor(
         val items: List<Channel> = emptyList(),
         val query: String = "",
         val sort: SortOrder = SortOrder.Added,
+    )
+
+    private data class CategorySnapshot(
+        val category: ChannelCategory,
+        val channels: List<Channel>,
+        val groups: List<GroupRow>,
     )
 
     fun onCategoryChange(category: ChannelCategory) {
@@ -106,29 +168,11 @@ class BrowseViewModel @Inject constructor(
         }
     }
 
-    private fun matchesCategory(group: String?, category: ChannelCategory): Boolean {
-        if (category == ChannelCategory.All) return true
-        val g = group?.uppercase().orEmpty()
-        return when (category) {
-            ChannelCategory.Movies ->
-                MOVIE_KEYWORDS.any { g.contains(it) } && SERIES_KEYWORDS.none { g.contains(it) }
-            ChannelCategory.Series -> SERIES_KEYWORDS.any { g.contains(it) }
-            ChannelCategory.Sports -> SPORT_KEYWORDS.any { g.contains(it) }
-            ChannelCategory.Live -> {
-                MOVIE_KEYWORDS.none { g.contains(it) } &&
-                    SERIES_KEYWORDS.none { g.contains(it) } &&
-                    SPORT_KEYWORDS.none { g.contains(it) }
-            }
-            ChannelCategory.All -> true
-        }
-    }
-
-    companion object {
-        private val MOVIE_KEYWORDS = listOf("MOVIE", "FILM", "CINEMA", "VOD")
-        private val SERIES_KEYWORDS = listOf("SERIES", "SERIE", "TV SHOW", "SEASON", "TELEFILM")
-        private val SPORT_KEYWORDS = listOf(
-            "SPORT", "FOOTBALL", "SOCCER", "NBA", "NFL", "UFC", "CRICKET",
-            "TENNIS", "F1", "MOTOR", "RUGBY", "BOXING", "GOLF",
-        )
+    private fun categoryKey(category: ChannelCategory): String? = when (category) {
+        ChannelCategory.Live -> CATEGORY_LIVE
+        ChannelCategory.Movies -> CATEGORY_MOVIES
+        ChannelCategory.Series -> CATEGORY_SERIES
+        ChannelCategory.Sports -> CATEGORY_SPORTS
+        ChannelCategory.All -> null
     }
 }

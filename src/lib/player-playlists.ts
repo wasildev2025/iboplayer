@@ -12,9 +12,17 @@ export type PlaylistDto = {
 
 export function playlistDtoFromRow(row: Playlist & { dns: Dns | null }): PlaylistDto {
   const serverUrl = resolveDnsUrl(row);
+  // Prefer DNS title so renaming a DNS propagates everywhere, and so legacy
+  // rows that stored the activation code as their title get cleaned up
+  // automatically without a DB migration.
+  const title =
+    row.dns?.title?.trim() ||
+    hostFromUrl(serverUrl) ||
+    row.title?.trim() ||
+    "Playlist";
   return {
     id: row.id,
-    title: row.title || "Playlist",
+    title,
     playlistUrl: buildM3uPlaylistUrl(serverUrl, row.username, row.password),
     protection: row.protection,
   };
@@ -43,10 +51,15 @@ export async function playlistsForMacUser(
     dnsId: macUser.dnsId,
     dns: legacyDns,
   });
+  const legacyTitle =
+    legacyDns?.title?.trim() ||
+    hostFromUrl(serverUrl) ||
+    macUser.title?.trim() ||
+    "Playlist";
   return [
     {
       id: macUser.id,
-      title: macUser.title || "Playlist",
+      title: legacyTitle,
       playlistUrl: buildM3uPlaylistUrl(serverUrl, macUser.username, macUser.password),
       protection: macUser.protection,
     },

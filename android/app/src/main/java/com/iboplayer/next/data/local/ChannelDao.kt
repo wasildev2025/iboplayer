@@ -11,11 +11,27 @@ interface ChannelDao {
     @Query("SELECT * FROM channels")
     fun getAll(): Flow<List<ChannelEntity>>
 
-    @Query("SELECT * FROM channels WHERE groupName = :group")
+    @Query("SELECT * FROM channels WHERE category = :category ORDER BY name COLLATE NOCASE ASC")
+    fun getByCategory(category: String): Flow<List<ChannelEntity>>
+
+    @Query(
+        "SELECT * FROM channels WHERE category = :category AND groupName = :group " +
+            "ORDER BY name COLLATE NOCASE ASC"
+    )
+    fun getByCategoryAndGroup(category: String, group: String): Flow<List<ChannelEntity>>
+
+    @Query("SELECT * FROM channels WHERE groupName = :group ORDER BY name COLLATE NOCASE ASC")
     fun getByGroup(group: String): Flow<List<ChannelEntity>>
 
     @Query("SELECT DISTINCT groupName FROM channels WHERE groupName IS NOT NULL")
     fun getGroups(): Flow<List<String>>
+
+    @Query(
+        "SELECT groupName, COUNT(*) AS count FROM channels " +
+            "WHERE category = :category AND groupName IS NOT NULL " +
+            "GROUP BY groupName ORDER BY groupName COLLATE NOCASE ASC"
+    )
+    fun getGroupsByCategory(category: String): Flow<List<GroupCount>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(channels: List<ChannelEntity>)
@@ -32,3 +48,5 @@ interface ChannelDao {
     @Query("SELECT * FROM channels WHERE isFavorite = 1")
     fun getFavorites(): Flow<List<ChannelEntity>>
 }
+
+data class GroupCount(val groupName: String, val count: Int)

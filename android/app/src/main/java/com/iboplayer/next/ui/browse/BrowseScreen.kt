@@ -33,14 +33,17 @@ import androidx.compose.material.icons.outlined.FilterList
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.SportsSoccer
 import androidx.compose.material.icons.outlined.Tv
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -66,6 +69,7 @@ import com.iboplayer.next.ui.theme.ProtonOrange
 import com.iboplayer.next.ui.theme.ProtonText
 import com.iboplayer.next.ui.theme.ProtonTextMuted
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BrowseScreen(
     onPlay: (Channel) -> Unit,
@@ -73,6 +77,7 @@ fun BrowseScreen(
     viewModel: BrowseViewModel = hiltViewModel(),
 ) {
     val state by viewModel.state.collectAsState()
+    val refreshing by viewModel.refreshing.collectAsState()
     var searchOpen by remember { mutableStateOf(false) }
 
     ProtonBackground {
@@ -107,10 +112,55 @@ fun BrowseScreen(
                 count = state.items.size,
             )
 
-            PosterGrid(
-                items = state.items,
-                onPlay = onPlay,
+            PullToRefreshBox(
+                isRefreshing = refreshing,
+                onRefresh = viewModel::refresh,
                 modifier = Modifier.fillMaxSize(),
+            ) {
+                when {
+                    state.items.isEmpty() && refreshing -> LoadingState()
+                    state.items.isEmpty() -> EmptyState()
+                    else -> PosterGrid(
+                        items = state.items,
+                        onPlay = onPlay,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadingState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(color = ProtonOrange, strokeWidth = 3.dp)
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "Loading channels…",
+                color = ProtonTextMuted,
+                style = MaterialTheme.typography.bodyMedium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun EmptyState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                "No items here yet.",
+                color = ProtonText,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Pull down to refresh.",
+                color = ProtonTextMuted,
+                style = MaterialTheme.typography.bodySmall,
             )
         }
     }
@@ -316,16 +366,6 @@ private fun PosterGrid(
     onPlay: (Channel) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (items.isEmpty()) {
-        Box(modifier = modifier, contentAlignment = Alignment.Center) {
-            Text(
-                "No items here yet.",
-                color = ProtonTextMuted,
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        }
-        return
-    }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(minSize = 130.dp),
         contentPadding = PaddingValues(14.dp),

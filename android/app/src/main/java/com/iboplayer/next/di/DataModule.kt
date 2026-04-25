@@ -30,11 +30,15 @@ object DataModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
+        // Channels are a refreshable cache (next reload re-pulls them from the
+        // panel), so destructive migration is safe and avoids hand-written
+        // migrations every time the channel schema evolves.
         return Room.databaseBuilder(
             context,
             AppDatabase::class.java,
             "ibo_player.db"
         )
+            .fallbackToDestructiveMigration()
             .build()
     }
 

@@ -1,4 +1,4 @@
-# IBO Player Next (Android)
+# IPTV Player (Android)
 
 Native Android IPTV player that loads M3U/M3U8 playlists and streams channels via ExoPlayer (Media3). Works **end-to-end with the Next.js panel** using the public player APIs (`/api/player/*`).
 
